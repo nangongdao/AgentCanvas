@@ -1,0 +1,555 @@
+@import 'tailwindcss';
+
+/*
+  C5-8: surface color tokens. Accent colors (pulse/volt/ok/bad/warn) are
+  shared across themes; only surfaces flip. The active theme is resolved
+  before first paint by an inline script in index.html (reads localStorage
+  `agentcanvas:theme` and `prefers-color-scheme`), so there is no flash.
+*/
+:root {
+  --void: #04060c;
+  --ink: #0a0e18;
+  --line: #151b2b;
+  --ghost: #8b93a7;
+  --ice: #e8ecf4;
+  --bg-void: #04060c;
+  --surface-glass: rgba(10, 14, 24, 0.72);
+  --surface-glass-border: rgba(21, 27, 43, 0.9);
+  --rf-bg: #04060c;
+  --rf-controls-bg: rgba(10, 14, 24, 0.85);
+  --rf-minimap-bg: rgba(10, 14, 24, 0.85);
+  --rf-minimap-mask: rgba(4, 6, 12, 0.82);
+  --rf-edge: #2c374f;
+  --rf-edge-selected: #22d3ee;
+  --rf-bg-dots: #1a2235;
+  --scrollbar: #1c2437;
+  --scrollbar-hover: #2c374f;
+  --selection-bg: rgba(34, 211, 238, 0.3);
+  --selection-color: #fff;
+  --outline-stroke: rgba(139, 147, 167, 0.14);
+  --focus-ring: #22d3ee;
+  /* Accent colors tuned for dark surfaces. */
+  --accent-pulse: #22d3ee;
+  --accent-volt: #8b5cf6;
+  --accent-ok: #34d399;
+  --accent-bad: #fb7185;
+  --accent-warn: #fbbf24;
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --void: #f6f8fb;
+  --ink: #ffffff;
+  --line: #e1e6ef;
+  --ghost: #3f4654;
+  --ice: #161c2a;
+  --bg-void: #f6f8fb;
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-glass-border: rgba(209, 216, 228, 0.9);
+  --rf-bg: #f6f8fb;
+  --rf-controls-bg: rgba(255, 255, 255, 0.9);
+  --rf-minimap-bg: rgba(255, 255, 255, 0.9);
+  --rf-minimap-mask: rgba(246, 248, 251, 0.82);
+  --rf-edge: #c4cad8;
+  --rf-edge-selected: #0891b2;
+  --rf-bg-dots: #d4d9e4;
+  --scrollbar: #cdd3df;
+  --scrollbar-hover: #b3bac9;
+  --selection-bg: rgba(8, 145, 178, 0.22);
+  --selection-color: #0f172a;
+  --outline-stroke: rgba(91, 100, 120, 0.22);
+  --focus-ring: #0891b2;
+  /* Darker accents so small text meets WCAG AA on light surfaces — including
+   * on their own 10% tinted badge backgrounds (bg-ok/10 etc.). */
+  --accent-pulse: #155e75;
+  --accent-volt: #6d28d9;
+  --accent-ok: #065f46;
+  --accent-bad: #9f1239;
+  --accent-warn: #92400e;
+  color-scheme: light;
+}
+
+@theme {
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-void: var(--void);
+  --color-ink: var(--ink);
+  --color-line: var(--line);
+  --color-ghost: var(--ghost);
+  --color-ice: var(--ice);
+  --color-pulse: var(--accent-pulse);
+  --color-volt: var(--accent-volt);
+  --color-ok: var(--accent-ok);
+  --color-bad: var(--accent-bad);
+  --color-warn: var(--accent-warn);
+
+  --shadow-glow-cyan:
+    0 0 24px -6px rgba(34, 211, 238, 0.55),
+    0 0 64px -18px rgba(34, 211, 238, 0.35);
+  --shadow-glow-violet:
+    0 0 24px -6px rgba(139, 92, 246, 0.5),
+    0 0 60px -20px rgba(139, 92, 246, 0.35);
+  --shadow-glow-ok: 0 0 20px -6px rgba(52, 211, 153, 0.55);
+  --shadow-glow-bad: 0 0 20px -6px rgba(251, 113, 133, 0.6);
+  --shadow-glow-amber: 0 0 18px -7px rgba(251, 191, 36, 0.5);
+  --shadow-card: 0 8px 32px -12px rgba(0, 0, 0, 0.8);
+
+  --animate-pulse-ring: pulseRing 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-dash-flow: dashFlow 0.8s linear infinite;
+  --animate-fade-up: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-in: slideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-blink: blink 1.1s steps(2, start) infinite;
+  --animate-marquee: marquee 28s linear infinite;
+  --animate-spin-slow: spin 6s linear infinite;
+
+  @keyframes pulseRing {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.45);
+    }
+    50% {
+      box-shadow: 0 0 0 7px rgba(34, 211, 238, 0);
+    }
+  }
+  @keyframes dashFlow {
+    to {
+      stroke-dashoffset: -16;
+    }
+  }
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility field-input {
+  @apply w-full rounded-lg border border-line bg-void/70 px-3 py-2 text-xs text-ice outline-hidden transition placeholder:text-ghost/35 focus:border-pulse/60;
+}
+
+@layer utilities {
+  :root {
+    --bg-void: var(--void);
+    --grid-line: rgba(34, 211, 238, 0.045);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    background: var(--bg-void);
+    color: var(--ice);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (max-width: 720px) {
+  .react-flow__minimap {
+    display: none;
+  }
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-color);
+}
+
+/* ---------- scrollbar ---------- */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* ---------- React Flow overrides ---------- */
+.react-flow__background {
+  background-color: var(--rf-bg) !important;
+}
+
+.react-flow__controls {
+  box-shadow: none !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+
+.react-flow__controls-button {
+  background: var(--rf-controls-bg) !important;
+  border-bottom: 1px solid var(--line) !important;
+  fill: var(--ghost) !important;
+  width: 28px !important;
+  height: 28px !important;
+  transition: all 0.2s;
+}
+.react-flow__controls-button:hover {
+  background: rgba(34, 211, 238, 0.12) !important;
+  fill: var(--color-pulse) !important;
+}
+
+.react-flow__minimap {
+  background: var(--rf-minimap-bg) !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+
+.react-flow__edge-path {
+  stroke: var(--rf-edge);
+  stroke-width: 1.5;
+  transition: stroke 0.3s;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--rf-edge-selected);
+}
+
+.react-flow__edge.edge-active .react-flow__edge-path {
+  stroke: var(--color-pulse);
+  stroke-width: 2;
+  stroke-dasharray: 8 8;
+  animation: dashFlow 0.7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.7));
+}
+
+.react-flow__edge.edge-done .react-flow__edge-path {
+  stroke: rgba(52, 211, 153, 0.75);
+  stroke-width: 1.8;
+}
+
+/* Branch actually chosen by condition/supervisor routing */
+.react-flow__edge.edge-taken .react-flow__edge-path {
+  stroke: var(--color-warn);
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6));
+}
+
+.react-flow__edge.edge-taken.edge-done .react-flow__edge-path {
+  stroke: rgba(251, 191, 36, 0.85);
+  stroke-width: 2;
+}
+
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+.react-flow__handle {
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.react-flow__handle:hover {
+  transform: scale(1.5);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.8);
+}
+
+.react-flow__node {
+  transition: filter 0.3s;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+/* ---------- ambient canvas grid glow ---------- */
+.ambient-stage {
+  position: relative;
+}
+.ambient-stage::before {
+  content: none;
+}
+
+/* Muted utility colors still need to remain readable on the canvas. In light
+ * mode the dimmed opacity variants would render as near-white text on a white
+ * glass surface, so the ambient-stage scope lifts them back to their full
+ * token color. Ghost stays ghost (muted), ice stays ice (foreground), and the
+ * line-based decorative numerals fall back to the muted-foreground token so
+ * they remain legible instead of dissolving into the surface. */
+.ambient-stage :where(
+    .text-ghost\/10,
+    .text-ghost\/15,
+    .text-ghost\/20,
+    .text-ghost\/25,
+    .text-ghost\/30,
+    .text-ghost\/35,
+    .text-ghost\/40,
+    .text-ghost\/45,
+    .text-ghost\/50,
+    .text-ghost\/55,
+    .text-ghost\/60,
+    .text-ghost\/65,
+    .text-ghost\/70,
+    .text-ghost\/75
+  ) {
+  color: var(--color-ghost);
+}
+
+.ambient-stage :where(
+    .text-ice\/40,
+    .text-ice\/50,
+    .text-ice\/60,
+    .text-ice\/70,
+    .text-ice\/75,
+    .text-ice\/80,
+    .text-ice\/85,
+    .text-ice\/90
+  ) {
+  color: var(--color-ice);
+}
+
+.ambient-stage :where(
+    .text-line\/40,
+    .text-line\/50,
+    .text-line\/60,
+    .text-line\/70
+  ) {
+  color: var(--color-ghost);
+}
+
+.ambient-stage :where(.text-volt) {
+  color: var(--color-volt);
+}
+
+/* C5-8: the same problem exists app-wide in light mode — dimmed ghost/ice
+ * opacity variants resolve to near-white on the light glass surfaces, so
+ * every text-bearing utility variant is lifted to its full (already darker)
+ * token color under the light theme. Ghost resolves to #3f4654 on the light
+ * surface (≈9:1), ice to the light-mode foreground. */
+[data-theme='light'] :where(
+    .text-ghost\/10,
+    .text-ghost\/15,
+    .text-ghost\/20,
+    .text-ghost\/25,
+    .text-ghost\/30,
+    .text-ghost\/35,
+    .text-ghost\/40,
+    .text-ghost\/45,
+    .text-ghost\/50,
+    .text-ghost\/55,
+    .text-ghost\/60,
+    .text-ghost\/65,
+    .text-ghost\/70,
+    .text-ghost\/75,
+    .text-ghost\/80,
+    .text-ghost\/85,
+    .text-ghost\/90
+  ) {
+  color: var(--color-ghost);
+}
+
+[data-theme='light'] :where(
+    .text-ice\/40,
+    .text-ice\/50,
+    .text-ice\/60,
+    .text-ice\/70,
+    .text-ice\/75,
+    .text-ice\/80,
+    .text-ice\/85,
+    .text-ice\/90
+  ) {
+  color: var(--color-ice);
+}
+
+[data-theme='light'] :where(
+    .text-line\/40,
+    .text-line\/50,
+    .text-line\/60,
+    .text-line\/70
+  ) {
+  color: var(--color-ghost);
+}
+
+/* ---------- glass panel ---------- */
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid var(--surface-glass-border);
+}
+
+/* ---------- streaming caret ---------- */
+.stream-caret::after {
+  content: "▍";
+  color: var(--color-pulse);
+  animation: blink 1.1s steps(2, start) infinite;
+  font-weight: 300;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---------- text glitch accent on hover ---------- */
+.brand-title {
+  letter-spacing: 0;
+  color: var(--ice);
+}
+
+/* ---------- outlined giant type (hero watermark) ---------- */
+.type-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--outline-stroke);
+  user-select: none;
+}
+
+/* ---------- button micro-interaction ---------- */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.25) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-primary:hover::before {
+  transform: translateX(120%);
+}
+
+/* ---------- node entrance ---------- */
+@keyframes nodePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.node-enter {
+  animation: nodePop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* C5-11: keyboard focus ring for canvas nodes. React Flow makes nodes
+ * focusable (tabIndex 0) with built-in Enter/Space selection and arrow-key
+ * movement; the focus state needs a visible ring to match the platform's
+ * keyboard-visible focus standard. */
+.react-flow__node:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* C5-8: light-theme surface adjustments for canvas nodes. The dark node
+ * background (bg-ink/90) is legible on dark canvas but reads as a heavy
+ * slab on light canvas, so in light mode we swap it for a softer card. */
+[data-theme='light'] .react-flow__node:not(.react-flow__node-group) > div.node-enter {
+  background: var(--ink);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 8px 24px -16px rgba(15, 23, 42, 0.18);
+}
+[data-theme='light'] .react-flow__node:not(.react-flow__node-group) > div.node-enter:hover {
+  border-color: var(--ghost);
+}
+
+/* ---------- status sweep for running nodes ---------- */
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+.node-running-sweep {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.node-running-sweep::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(34, 211, 238, 0.14), transparent);
+  animation: sweep 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

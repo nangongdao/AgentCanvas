@@ -1,0 +1,70 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "agentcanvas-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum(rate(agentcanvas_executions_total{status=\"succeeded\"}[5m])) / clamp_min(sum(rate(agentcanvas_executions_total[5m])), 0.001)", "refId": "A"}],
+      "title": "Execution Success Ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "agentcanvas-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(agentcanvas_http_duration_seconds_bucket[5m])))", "refId": "A"}],
+      "title": "HTTP p95",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "agentcanvas-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, provider) (rate(agentcanvas_provider_ttft_seconds_bucket[5m])))", "legendFormat": "{{provider}}", "refId": "A"}],
+      "title": "Provider TTFT p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "agentcanvas-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "targets": [{"expr": "agentcanvas_sse_connections", "refId": "A"}],
+      "title": "Active SSE Connections",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "agentcanvas-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "sum by (route, status) (rate(agentcanvas_http_requests_total[5m]))", "legendFormat": "{{status}} {{route}}", "refId": "A"}],
+      "title": "HTTP Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "agentcanvas-prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+      "id": 6,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, status) (rate(agentcanvas_execution_duration_seconds_bucket[5m])))", "legendFormat": "{{status}}", "refId": "A"}],
+      "title": "Execution Duration p95",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["agentcanvas", "u4"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "AgentCanvas Overview",
+  "uid": "agentcanvas-overview",
+  "version": 1
+}

@@ -1,0 +1,30 @@
+{
+  "plugin_id": "builtin.echo",
+  "version": "1.0.0",
+  "api_version": "1.0",
+  "protocol_version": "1.0",
+  "node_type": "plugin.echo",
+  "label": "Echo Plugin",
+  "description": "A minimal process-isolated plugin used to verify the node SDK contract.",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "message": {"type": "string", "minLength": 1, "maxLength": 1000, "default": "Hello from plugin"},
+      "include_input": {"type": "boolean", "default": false}
+    },
+    "required": ["message"],
+    "additionalProperties": false
+  },
+  "ui_hints": {
+    "icon": "Sparkles",
+    "color": "#a78bfa",
+    "inspector_group": "Plugins"
+  },
+  "permissions": {
+    "network": [],
+    "filesystem": [],
+    "commands": []
+  },
+  "entrypoint": "worker.py",
+  "timeout_seconds": 3.0
+}

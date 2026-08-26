@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "EventType": {
+      "enum": [
+        "workflow_started",
+        "node_started",
+        "node_streaming",
+        "node_finished",
+        "node_failed",
+        "edge_taken",
+        "workflow_interrupted",
+        "workflow_finished",
+        "workflow_failed",
+        "workflow_cancelled"
+      ],
+      "title": "EventType",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "event_type": {
+      "$ref": "#/$defs/EventType"
+    },
+    "execution_id": {
+      "title": "Execution Id",
+      "type": "string"
+    },
+    "node_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Node Id"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seq": {
+      "default": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "ts": {
+      "title": "Ts",
+      "type": "string"
+    }
+  },
+  "required": [
+    "execution_id",
+    "event_type"
+  ],
+  "title": "ExecutionEvent",
+  "type": "object"
+}

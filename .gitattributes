@@ -1,0 +1,33 @@
+# Auto-detect text files
+* text=auto
+
+# Source code
+*.py text diff=python
+*.ts text diff=typescript
+*.tsx text diff=typescript
+*.css text
+*.html text
+*.json text
+*.yaml text
+*.yml text
+*.md text
+*.toml text
+*.sh text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Lock files — keep as-is
+uv.lock binary
+pnpm-lock.yaml binary
+package-lock.json binary
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg text
+*.ico binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary

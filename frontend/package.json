@@ -1,0 +1,45 @@
+{
+  "name": "agentcanvas-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.6.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && pnpm check:bundle",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
+    "contracts:check": "node scripts/generate-contracts.mjs",
+    "contracts:generate": "node scripts/generate-contracts.mjs --write",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
+    "test:e2e-config": "node --test scripts/e2e-data-path.test.mjs",
+    "test:e2e": "playwright test",
+    "test:perf-scale": "playwright test --config playwright.perf-scale.config.ts"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "3.1.1",
+    "@tanstack/react-virtual": "^3.10.8",
+    "@xyflow/react": "^12.3.5",
+    "lucide-react": "^1.26.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
+    "zundo": "2.3.0",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.62.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "openapi-typescript": "7.13.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^8.2.0"
+  }
+}

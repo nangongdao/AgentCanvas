@@ -1,0 +1,494 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.32
+
+      - name: Sync backend dependencies
+        working-directory: backend
+        run: python -m uv sync --frozen
+
+      - name: Backend tests and coverage gates
+        working-directory: backend
+        run: |
+          python -m uv run pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-report=json:coverage.json
+          python scripts/check_coverage.py coverage.json
+
+      - name: Backend lint
+        working-directory: backend
+        run: python -m uv run ruff check app tests scripts
+
+      - name: Backend type check
+        working-directory: backend
+        run: python -m uv run mypy app tests scripts
+
+      - name: Public contract drift and compatibility
+        working-directory: backend
+        run: python -m uv run python -m scripts.contracts check
+
+      - name: Backend performance smoke
+        working-directory: backend
+        run: python -m uv run python -m scripts.performance_budget --output performance-smoke.json
+
+      - name: Upload backend performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-performance-smoke
+          path: backend/performance-smoke.json
+          if-no-files-found: ignore
+
+      - name: Backend dependency audit
+        working-directory: backend
+        # chromadb CVE (PYSEC-2026-311) targets the unauthenticated HTTP
+        # /api/v2 endpoint; we only use the embedded PersistentClient and never
+        # start that server. Accepted per roadmap U1-6 risk-acceptance table.
+        run: python -m uv run pip-audit --ignore-vuln PYSEC-2026-311
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.6.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend checks
+        working-directory: frontend
+        run: |
+          pnpm contracts:check
+          pnpm typecheck
+          pnpm typecheck:e2e
+          pnpm test:e2e-config
+          pnpm build
+
+      - name: Frontend dependency audit
+        working-directory: frontend
+        # Router 7.18.2 closes the final accepted frontend advisories; keep the
+        # clean baseline from regressing at any actionable severity.
+        run: pnpm audit --audit-level moderate
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser regression suite
+        working-directory: frontend
+        run: pnpm test:e2e
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore
+
+  postgresql-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg17-bookworm
+        env:
+          POSTGRES_USER: agentcanvas
+          POSTGRES_PASSWORD: agentcanvas-test-password
+          POSTGRES_DB: agentcanvas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentcanvas -d agentcanvas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgresql+asyncpg://agentcanvas:agentcanvas-test-password@127.0.0.1:5432/agentcanvas_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.32
+
+      - name: Sync backend dependencies
+        working-directory: backend
+        run: python -m uv sync --frozen
+
+      - name: PostgreSQL migrations, drift, and tenant integration
+        working-directory: backend
+        run: python -m uv run pytest -q -m postgres
+
+  redis-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      REDIS_TEST_URL: redis://127.0.0.1:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.32
+
+      - name: Sync backend dependencies
+        working-directory: backend
+        run: python -m uv sync --frozen
+
+      - name: Real Redis Streams relay and duplicate-delivery integration
+        working-directory: backend
+        run: python -m uv run pytest -q -m redis
+
+  container-release:
+    runs-on: ubuntu-latest
+    needs: [quality, postgresql-integration, redis-integration]
+    timeout-minutes: 60
+    concurrency:
+      group: container-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash --noprofile --norc -Eeuo pipefail {0}
+    env:
+      SECRET_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      ADMIN_API_TOKEN: admin-container-smoke-token-20260804
+      CORS_ORIGINS: http://127.0.0.1:8080
+      IMAGE_TAG: ${{ github.sha }}
+      PRODUCT_VERSION: 1.0.0
+      POSTGRES_USER: agentcanvas
+      POSTGRES_PASSWORD: agentcanvas-container-test-password
+      POSTGRES_DB: agentcanvas
+      POSTGRES_RESTORE_DB: agentcanvas_restore
+      DATABASE_URL: postgresql+asyncpg://agentcanvas:agentcanvas-container-test-password@postgres:5432/agentcanvas
+      PG_RESTORE_TARGET_DATABASE_URL: postgresql+asyncpg://agentcanvas:agentcanvas-container-test-password@postgres:5432/agentcanvas_restore
+      EXECUTION_LEASE_SECONDS: 6
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create CI production env file
+        run: touch .env.production
+
+      - name: Validate production Compose contract
+        run: docker compose --env-file .env.production -f compose.prod.yml config --quiet
+
+      - name: Build release images
+        run: docker compose --env-file .env.production -f compose.prod.yml build
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: agentcanvas-backend:${{ github.sha }}
+          vuln-type: os
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: agentcanvas-frontend:${{ github.sha }}
+          vuln-type: os
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+      - name: Start production topology
+        run: docker compose --env-file .env.production -f compose.prod.yml up -d --wait --scale backend=2 --scale worker=2
+
+      - name: Require two API and two worker replicas
+        run: |
+          test "$(docker compose --env-file .env.production -f compose.prod.yml ps -q backend | wc -l)" -eq 2
+          test "$(docker compose --env-file .env.production -f compose.prod.yml ps -q worker | wc -l)" -eq 2
+
+      - name: Public container smoke
+        run: python backend/scripts/container_smoke.py --token "$ADMIN_API_TOKEN"
+
+      - name: Cross-API and shared-SSE topology smoke
+        run: python backend/scripts/distributed_smoke.py topology --token "$ADMIN_API_TOKEN"
+
+      - name: Dedicated worker outage and queued recovery
+        run: |
+          docker compose --env-file .env.production -f compose.prod.yml stop worker
+          python backend/scripts/distributed_smoke.py enqueue --token "$ADMIN_API_TOKEN" --state queued-worker.json
+          docker compose --env-file .env.production -f compose.prod.yml start worker
+          python backend/scripts/distributed_smoke.py wait-queued --token "$ADMIN_API_TOKEN" --state queued-worker.json
+
+      - name: Pause a live owner, reassign, then reject the stale generation
+        run: |
+          python backend/scripts/distributed_smoke.py prepare-slow --token "$ADMIN_API_TOKEN" --state killed-worker.json
+          execution_id=$(python -c 'import json; print(json.load(open("killed-worker.json"))["execution_id"])')
+          owner_id=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT owner_id FROM execution_queue_items WHERE execution_id='$execution_id'")
+          test -n "$owner_id"
+          victim_id=""
+          for container_id in $(docker compose --env-file .env.production -f compose.prod.yml ps -q worker); do
+            if [ "$(docker inspect --format '{{.Config.Hostname}}' "$container_id")" = "$owner_id" ]; then victim_id="$container_id"; fi
+          done
+          test -n "$victim_id"
+          docker pause "$victim_id"
+          replacement_owner=""
+          for retry in $(seq 1 90); do
+            replacement_owner=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT coalesce(owner_id, '') FROM execution_queue_items WHERE execution_id='$execution_id'")
+            attempt=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT attempt FROM execution_queue_items WHERE execution_id='$execution_id'")
+            if [ -n "$replacement_owner" ] && [ "$replacement_owner" != "$owner_id" ] && [ "$attempt" -ge 2 ]; then break; fi
+            sleep 0.5
+          done
+          test -n "$replacement_owner"
+          test "$replacement_owner" != "$owner_id"
+          test "$attempt" -ge 2
+          docker unpause "$victim_id"
+          python backend/scripts/distributed_smoke.py wait-stream --token "$ADMIN_API_TOKEN" --state killed-worker.json
+          queue_status=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT status FROM execution_queue_items WHERE execution_id='$execution_id'")
+          terminal_count=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM execution_events WHERE execution_id='$execution_id' AND event_type IN ('workflow_finished', 'workflow_failed', 'workflow_cancelled')")
+          event_shape=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) || ':' || min(seq) || ':' || max(seq) FROM execution_events WHERE execution_id='$execution_id'")
+          test "$queue_status" = "done"
+          test "$terminal_count" -eq 1
+          event_count=${event_shape%%:*}
+          event_remainder=${event_shape#*:}
+          event_min=${event_remainder%%:*}
+          event_max=${event_shape##*:}
+          test "$event_min" -eq 1
+          test "$event_count" -eq "$event_max"
+
+      - name: Kill an ambiguous side-effect owner and dead-letter without replay
+        run: |
+          python backend/scripts/distributed_smoke.py prepare-ambiguous --token "$ADMIN_API_TOKEN" --state ambiguous-worker.json
+          execution_id=$(python -c 'import json; print(json.load(open("ambiguous-worker.json"))["execution_id"])')
+          owner_id=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT owner_id FROM execution_queue_items WHERE execution_id='$execution_id'")
+          test -n "$owner_id"
+          victim_id=""
+          for container_id in $(docker compose --env-file .env.production -f compose.prod.yml ps -q worker); do
+            if [ "$(docker inspect --format '{{.Config.Hostname}}' "$container_id")" = "$owner_id" ]; then victim_id="$container_id"; fi
+          done
+          test -n "$victim_id"
+          docker kill "$victim_id"
+          python backend/scripts/distributed_smoke.py wait-dead-letter --token "$ADMIN_API_TOKEN" --state ambiguous-worker.json
+          attempt=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT attempt FROM execution_queue_items WHERE execution_id='$execution_id'")
+          queue_status=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT status FROM execution_queue_items WHERE execution_id='$execution_id'")
+          test "$attempt" -eq 1
+          test "$queue_status" = "dead_letter"
+
+      - name: Restore two-worker topology after destructive fault
+        run: |
+          docker compose --env-file .env.production -f compose.prod.yml up -d --wait --no-deps --scale worker=2 worker
+          test "$(docker compose --env-file .env.production -f compose.prod.yml ps --status running -q worker | wc -l)" -eq 2
+
+      - name: Duplicate Redis delivery is de-duplicated by SSE sequence
+        run: |
+          python backend/scripts/distributed_smoke.py prepare-slow --token "$ADMIN_API_TOKEN" --state duplicate-delivery.json
+          execution_id=$(python -c 'import json; print(json.load(open("duplicate-delivery.json"))["execution_id"])')
+          event_seq=""
+          for attempt in $(seq 1 30); do
+            event_seq=$(docker compose --env-file .env.production -f compose.prod.yml exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT min(seq) FROM execution_events WHERE execution_id='$execution_id'")
+            if [ -n "$event_seq" ]; then break; fi
+            sleep 0.2
+          done
+          test -n "$event_seq"
+          docker compose --env-file .env.production -f compose.prod.yml exec -T redis redis-cli XADD "agentcanvas:exec-events:$execution_id" '*' execution_id "$execution_id" seq "$event_seq" event_type workflow_started node_id '' ts '2026-08-10T00:00:00+00:00' payload '{}' event_row_id 0
+          python backend/scripts/distributed_smoke.py wait-stream --token "$ADMIN_API_TOKEN" --state duplicate-delivery.json
+
+      - name: Live SSE survives Redis loss and Redis reconnects
+        run: |
+          python backend/scripts/distributed_smoke.py stream-redis-loss --token "$ADMIN_API_TOKEN" --state redis-loss.json >redis-loss-result.json &
+          sse_pid=$!
+          cleanup_sse() {
+            kill "$sse_pid" 2>/dev/null || true
+            wait "$sse_pid" 2>/dev/null || true
+          }
+          trap cleanup_sse EXIT
+          for attempt in $(seq 1 60); do
+            if [ -s redis-loss.json ]; then break; fi
+            sleep 0.2
+          done
+          test -s redis-loss.json
+          docker compose --env-file .env.production -f compose.prod.yml kill -s SIGKILL redis
+          wait "$sse_pid"
+          trap - EXIT
+          docker compose --env-file .env.production -f compose.prod.yml up -d --wait redis
+          python backend/scripts/distributed_smoke.py topology --token "$ADMIN_API_TOKEN" >redis-recovery.json
+          recovery_id=$(python -c 'import json; print(json.load(open("redis-recovery.json"))["execution_id"])')
+          stream_length="0"
+          for attempt in $(seq 1 30); do
+            stream_length=$(docker compose --env-file .env.production -f compose.prod.yml exec -T redis redis-cli XLEN "agentcanvas:exec-events:$recovery_id")
+            if [ "$stream_length" -gt 0 ]; then break; fi
+            sleep 0.2
+          done
+          test "$stream_length" -gt 0
+
+      - name: Full runtime restart preserves human approval
+        run: |
+          python backend/scripts/distributed_smoke.py prepare-human --token "$ADMIN_API_TOKEN" --state restart-approval.json
+          docker compose --env-file .env.production -f compose.prod.yml restart backend worker scheduler relay
+          for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:8080/readyz && break; sleep 1; done
+          curl --fail --silent http://127.0.0.1:8080/readyz
+          python backend/scripts/distributed_smoke.py resume-human --token "$ADMIN_API_TOKEN" --state restart-approval.json
+
+      - name: Preserve a waiting approval in the disaster-recovery snapshot
+        run: python backend/scripts/distributed_smoke.py prepare-human --token "$ADMIN_API_TOKEN" --state backup-approval.json
+
+      - name: Preserve a known pgvector ranking in the disaster-recovery snapshot
+        run: python backend/scripts/distributed_smoke.py prepare-rag --token "$ADMIN_API_TOKEN" --state backup-rag.json
+
+      - name: Quiesce all application writers before the snapshot
+        run: |
+          docker compose --env-file .env.production -f compose.prod.yml stop frontend backend worker scheduler relay
+          test -z "$(docker compose --env-file .env.production -f compose.prod.yml ps --status running -q backend worker scheduler relay)"
+
+      - name: Create consistent backup archive
+        run: docker compose --env-file .env.production -f compose.prod.yml --profile backup run --rm backup
+
+      - name: Restore into an isolated empty PostgreSQL database
+        run: |
+          docker compose --env-file .env.production -f compose.prod.yml exec -T postgres createdb -U "$POSTGRES_USER" --maintenance-db "$POSTGRES_DB" "$POSTGRES_RESTORE_DB"
+          docker compose --env-file .env.production -f compose.prod.yml --profile restore run --rm restore
+          docker compose --env-file .env.production -f compose.prod.yml --profile restore run --rm restore-drill
+
+      - name: Restored runtime passes readiness, retrieval, and approval resume
+        run: |
+          docker compose --env-file .env.production -f compose.prod.yml --profile restore run --no-deps -d --name agentcanvas-restore-api -p 18000:8000 restore-api
+          docker compose --env-file .env.production -f compose.prod.yml --profile restore run --no-deps -d --name agentcanvas-restore-worker restore-worker
+          for attempt in $(seq 1 60); do curl --fail --silent http://127.0.0.1:18000/readyz && break; sleep 1; done
+          curl --fail --silent http://127.0.0.1:18000/readyz
+          python backend/scripts/distributed_smoke.py verify-rag --base-url http://127.0.0.1:18000 --token "$ADMIN_API_TOKEN" --state backup-rag.json
+          python backend/scripts/distributed_smoke.py resume-human --base-url http://127.0.0.1:18000 --token "$ADMIN_API_TOKEN" --state backup-approval.json
+
+      - name: Unpause fault-injected containers
+        if: always()
+        run: |
+          while IFS= read -r container_id; do
+            [ -n "$container_id" ] || continue
+            docker unpause "$container_id" 2>/dev/null || true
+          done < <(docker compose --env-file .env.production -f compose.prod.yml ps --all -q worker 2>/dev/null || true)
+
+      - name: Show container state and logs
+        if: always()
+        run: |
+          docker compose --env-file .env.production -f compose.prod.yml ps
+          docker compose --env-file .env.production -f compose.prod.yml logs --no-color --tail=200
+
+      - name: Stop container topology
+        if: always()
+        run: |
+          docker rm -f agentcanvas-restore-api 2>/dev/null || true
+          docker rm -f agentcanvas-restore-worker 2>/dev/null || true
+          docker compose --env-file .env.production -f compose.prod.yml down --volumes --remove-orphans
+
+      - name: Export tested release images
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: docker save "agentcanvas-backend:$GITHUB_SHA" "agentcanvas-frontend:$GITHUB_SHA" | gzip -1 > release-images.tar.gz
+
+      - name: Upload tested release images
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: tested-release-images-${{ github.sha }}
+          path: release-images.tar.gz
+          compression-level: 0
+          retention-days: 1
+
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [container-release]
+    timeout-minutes: 15
+    concurrency:
+      group: publish-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        shell: bash --noprofile --norc -Eeuo pipefail {0}
+    env:
+      PRODUCT_VERSION: 1.0.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download tested release images
+        uses: actions/download-artifact@v4
+        with:
+          name: tested-release-images-${{ github.sha }}
+
+      - name: Load tested release images
+        run: gzip -dc release-images.tar.gz | docker load
+
+      - name: Publish immutable version and SHA image tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          package_version=$(python -c 'import tomllib; print(tomllib.load(open("backend/pyproject.toml", "rb"))["project"]["version"])')
+          test "$release_version" = "$PRODUCT_VERSION"
+          test "$package_version" = "$PRODUCT_VERSION"
+          python backend/scripts/check_release_metadata.py --version "$PRODUCT_VERSION" --changelog CHANGELOG.md
+          image_namespace=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+          for component in backend frontend; do
+            remote_image="ghcr.io/$image_namespace/agentcanvas-$component"
+            for tag in "$PRODUCT_VERSION" "$GITHUB_SHA"; do
+              if docker manifest inspect "$remote_image:$tag" >/dev/null 2>&1; then
+                echo "::error::Refusing to overwrite existing image tag $remote_image:$tag"
+                exit 1
+              fi
+            done
+          done
+
+          for component in backend frontend; do
+            local_image="agentcanvas-$component:$GITHUB_SHA"
+            remote_image="ghcr.io/$image_namespace/agentcanvas-$component"
+            docker tag "$local_image" "$remote_image:$PRODUCT_VERSION"
+            docker tag "$local_image" "$remote_image:$GITHUB_SHA"
+            docker push "$remote_image:$PRODUCT_VERSION"
+            docker push "$remote_image:$GITHUB_SHA"
+          done

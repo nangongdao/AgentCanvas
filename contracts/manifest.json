@@ -1,0 +1,13 @@
+{
+  "baseline": "baselines/1.0.0",
+  "current": {
+    "dsl": "current/workflow-dsl.schema.json",
+    "event": "current/execution-event.schema.json",
+    "openapi": "current/openapi.json"
+  },
+  "versions": {
+    "api": "1.0.0",
+    "dsl": "1.0",
+    "event": "1.0"
+  }
+}

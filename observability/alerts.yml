@@ -1,0 +1,63 @@
+groups:
+  - name: agentcanvas
+    rules:
+      - alert: AgentCanvasBackendUnavailable
+        expr: up{job="agentcanvas"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: AgentCanvas backend is unavailable
+          runbook: docs/operations-runbook.md
+
+      - alert: AgentCanvasHighHttp5xxRate
+        expr: |
+          sum(rate(agentcanvas_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(agentcanvas_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: HTTP 5xx ratio is above 5 percent
+          runbook: docs/observability.md
+
+      - alert: AgentCanvasExecutionFailureRate
+        expr: |
+          sum(rate(agentcanvas_executions_total{status="failed"}[10m]))
+          /
+          clamp_min(sum(rate(agentcanvas_executions_total[10m])), 0.001)
+          > 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Workflow failure ratio is above 10 percent
+          runbook: docs/observability.md
+
+      - alert: AgentCanvasProviderP95Slow
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, provider) (rate(agentcanvas_provider_duration_seconds_bucket[10m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Provider p95 latency exceeds 30 seconds
+          runbook: docs/observability.md
+
+      - alert: AgentCanvasEventBacklog
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(agentcanvas_event_queue_depth_bucket[5m]))
+          ) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Event persistence backlog p95 exceeds 100 events
+          runbook: docs/observability.md

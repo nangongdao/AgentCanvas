@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentCanvas — Visual Multi-Agent Orchestration</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // C5-8/C5-9: resolve the theme and document language before first paint
+      // to avoid a flash of the wrong surface or locale. The script is inlined
+      // and runs synchronously in <head> so the CSS variables and lang
+      // attribute are set before the body renders.
+      (function () {
+        try {
+          var stored = localStorage.getItem("agentcanvas:theme");
+          var mode = stored === "light" || stored === "dark"
+            ? stored
+            : window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+          if (mode === "light") {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+          var locale = localStorage.getItem("agentcanvas:locale");
+          document.documentElement.lang = locale === "en" ? "en" : "zh";
+        } catch (e) {
+          /* localStorage unavailable; defaults (dark, zh) remain */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

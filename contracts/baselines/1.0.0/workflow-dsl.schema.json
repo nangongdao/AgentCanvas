@@ -1,0 +1,225 @@
+{
+  "$defs": {
+    "EdgeSpec": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "source_handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Handle"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "target_handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Handle"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
+      "title": "EdgeSpec",
+      "type": "object"
+    },
+    "NodeSpec": {
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "position": {
+          "$ref": "#/$defs/Position"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeType"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Type"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "NodeSpec",
+      "type": "object"
+    },
+    "NodeType": {
+      "enum": [
+        "start",
+        "agent",
+        "tool",
+        "condition",
+        "rag",
+        "human",
+        "end"
+      ],
+      "title": "NodeType",
+      "type": "string"
+    },
+    "Position": {
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Position",
+      "type": "object"
+    },
+    "VariableType": {
+      "enum": [
+        "string",
+        "number",
+        "boolean",
+        "object"
+      ],
+      "title": "VariableType",
+      "type": "string"
+    },
+    "WorkflowSettings": {
+      "properties": {
+        "max_loop_iterations": {
+          "default": 20,
+          "title": "Max Loop Iterations",
+          "type": "integer"
+        },
+        "recursion_limit": {
+          "default": 50,
+          "title": "Recursion Limit",
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "default": 300,
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "WorkflowSettings",
+      "type": "object"
+    },
+    "WorkflowVariable": {
+      "properties": {
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "$ref": "#/$defs/VariableType",
+          "default": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkflowVariable",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/EdgeSpec"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "name": {
+      "default": "未命名工作流",
+      "title": "Name",
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/NodeSpec"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "settings": {
+      "$ref": "#/$defs/WorkflowSettings"
+    },
+    "variables": {
+      "items": {
+        "$ref": "#/$defs/WorkflowVariable"
+      },
+      "title": "Variables",
+      "type": "array"
+    },
+    "version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "title": "WorkflowDSL",
+  "type": "object"
+}

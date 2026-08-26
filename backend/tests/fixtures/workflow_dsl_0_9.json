@@ -1,0 +1,44 @@
+{
+  "version": "0.9",
+  "display_name": "Legacy handoff",
+  "settings": {
+    "timeout_seconds": 45
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "kind": "start",
+      "x": 10,
+      "y": 20,
+      "config": {
+        "input_schema": [
+          {
+            "name": "query",
+            "type": "string",
+            "required": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "end",
+      "kind": "end",
+      "x": 310,
+      "y": 20,
+      "config": {
+        "output_template": {
+          "answer": "{{input.query}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "start-end",
+      "source": "start",
+      "target": "end",
+      "sourceHandle": null,
+      "targetHandle": null
+    }
+  ]
+}
