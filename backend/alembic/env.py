@@ -7,7 +7,9 @@ from collections.abc import MutableMapping
 from logging.config import fileConfig
 from typing import Literal
 
+from alembic.autogenerate import comparators
 from alembic.autogenerate.api import AutogenContext
+from alembic.util.langhelpers import PriorityDispatchResult
 from sqlalchemy import Column, pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -38,22 +40,29 @@ def _include_name(
     return type_ != "table" or name not in LANGGRAPH_CHECKPOINT_TABLES
 
 
-def _compare_column(
-    context: AutogenContext,
-    column: Column,
+@comparators.dispatch_for("column")
+def _ignore_pk_nullability(
+    _context: AutogenContext,
+    _alter_column_op,
+    _schema: str | None,
+    _tname: str,
+    _cname: str,
+    conn_col: Column,
     metadata_col: Column,
-) -> bool:
-    """Ignore nullability diffs on primary-key columns under PostgreSQL.
+) -> PriorityDispatchResult:
+    """Skip nullability diffs on primary-key columns under PostgreSQL.
 
     PK columns are always NOT NULL in Postgres, so autogenerate reflects them
     as non-nullable even when the model (and migration) declares nullable=True
     (the "no app" / "no model" usage-fact buckets). SQLite keeps them truly
-    nullable; skipping the comparison on PostgreSQL is the only behavior that
-    stays in sync with both backends.
+    nullable; stopping this comparator on PostgreSQL keeps both backends in
+    sync without a fake migration.
     """
-    if not context.dialect.name.startswith("postgres"):
-        return False
-    return bool(metadata_col.primary_key) and column.nullable != metadata_col.nullable
+    if not _context.dialect.name.startswith("postgres"):
+        return PriorityDispatchResult.CONTINUE
+    if metadata_col.primary_key:
+        return PriorityDispatchResult.STOP
+    return PriorityDispatchResult.CONTINUE
 
 
 def run_migrations_offline() -> None:
@@ -64,7 +73,6 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         include_name=_include_name,
-        compare_column=_compare_column,
     )
 
     with context.begin_transaction():
@@ -77,7 +85,6 @@ def _run_sync_migrations(connection) -> None:
         target_metadata=target_metadata,
         compare_type=True,
         include_name=_include_name,
-        compare_column=_compare_column,
     )
 
     with context.begin_transaction():
