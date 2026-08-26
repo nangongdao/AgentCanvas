@@ -341,3 +341,7 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 
 **部署** Docker Compose · nginx · PostgreSQL 17 · GitHub Actions · Trivy
 
+## 许可与说明
+
+本项目作为公开技术演示与作品集项目发布。仓库仅包含代码与公开技术文档,不含内部开发规划、商业路线图或部署凭据。
+
