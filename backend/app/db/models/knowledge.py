@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -132,6 +133,14 @@ class DocumentChunk(Base):
             name="ck_document_chunks_dimensions",
         ),
         Index("ix_document_chunks_kb_document", "kb_id", "document_id"),
+        # GIN expression index for PostgreSQL hybrid retrieval (0035). Declared
+        # here so autogenerate sees the migrated PG schema as in sync; SQLite
+        # ranks keyword candidates in process and never creates this index.
+        Index(
+            "ix_document_chunks_text_tsv",
+            text("to_tsvector('simple', text)"),
+            postgresql_using="gin",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)

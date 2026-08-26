@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import MutableMapping
 from logging.config import fileConfig
+from typing import Literal
 
-from sqlalchemy import pool, text
+from alembic.autogenerate.api import AutogenContext
+from sqlalchemy import Column, pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
@@ -25,8 +28,32 @@ LANGGRAPH_CHECKPOINT_TABLES = frozenset(
 )
 
 
-def _include_name(name: str | None, type_: str, _parent_names: dict[str, str | None]) -> bool:
+def _include_name(
+    name: str | None,
+    type_: Literal["schema", "table", "column", "index", "unique_constraint", "foreign_key_constraint"],
+    _parent_names: MutableMapping[
+        Literal["schema_name", "table_name", "schema_qualified_table_name"], str | None
+    ],
+) -> bool:
     return type_ != "table" or name not in LANGGRAPH_CHECKPOINT_TABLES
+
+
+def _compare_column(
+    context: AutogenContext,
+    column: Column,
+    metadata_col: Column,
+) -> bool:
+    """Ignore nullability diffs on primary-key columns under PostgreSQL.
+
+    PK columns are always NOT NULL in Postgres, so autogenerate reflects them
+    as non-nullable even when the model (and migration) declares nullable=True
+    (the "no app" / "no model" usage-fact buckets). SQLite keeps them truly
+    nullable; skipping the comparison on PostgreSQL is the only behavior that
+    stays in sync with both backends.
+    """
+    if not context.dialect.name.startswith("postgres"):
+        return False
+    return bool(metadata_col.primary_key) and column.nullable != metadata_col.nullable
 
 
 def run_migrations_offline() -> None:
@@ -37,6 +64,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         include_name=_include_name,
+        compare_column=_compare_column,
     )
 
     with context.begin_transaction():
@@ -49,6 +77,7 @@ def _run_sync_migrations(connection) -> None:
         target_metadata=target_metadata,
         compare_type=True,
         include_name=_include_name,
+        compare_column=_compare_column,
     )
 
     with context.begin_transaction():

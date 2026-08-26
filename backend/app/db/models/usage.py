@@ -31,6 +31,10 @@ class UsageDailyFact(Base):
 
     organization_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    # PostgreSQL makes primary-key columns NOT NULL; alembic's autogenerate
+    # reflects them as non-nullable and would diff against these nullable=True
+    # declarations. The env.py comparator ignores PK-column nullability so
+    # both SQLite (nullable buckets) and PostgreSQL stay in sync.
     app_id: Mapped[str | None] = mapped_column(String(32), primary_key=True)
     model_config_id: Mapped[str | None] = mapped_column(String(32), primary_key=True)
     day: Mapped[date] = mapped_column(Date, primary_key=True)
