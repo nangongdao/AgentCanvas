@@ -53,7 +53,7 @@ flowchart TB
     end
 
     subgraph EXT["外部能力"]
-        Prov["Provider Registry<br/>OpenAI 兼容 / Anthropic / Ollama"]
+        Prov["Provider Registry<br/>OpenAI 兼容 / Anthropic / Gemini / Ollama"]
         MCP["McpConnectionManager<br/>stdio / SSE / streamable-http"]
         RAG["向量检索<br/>Chroma / pgvector / SQL"]
     end
@@ -338,7 +338,7 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 
 **后端** Python 3.12+ · FastAPI · LangGraph 1.x · 官方 MCP SDK 2.x · SQLAlchemy 2 + Alembic · Chroma / pgvector · Redis · OpenTelemetry · pytest
 
-**LLM Provider** OpenAI 兼容协议 · Anthropic Messages API · Ollama
+**LLM Provider** OpenAI 兼容协议(含 DeepSeek / vLLM 等) · Anthropic Messages API · Google Gemini · Ollama
 
 **部署** Docker Compose · nginx · PostgreSQL 17 · GitHub Actions · Trivy
 

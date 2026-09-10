@@ -9,6 +9,7 @@ from app.core.secret_providers import SecretResolver
 from app.core.security import SecretBox
 from app.db.models import ModelConfig
 from app.providers import anthropic_provider as _anthropic  # noqa: F401
+from app.providers import gemini_provider as _gemini  # noqa: F401
 from app.providers import mock_provider as _mock  # noqa: F401
 from app.providers import ollama_provider as _ollama  # noqa: F401
 from app.providers import openai_provider as _openai  # noqa: F401
@@ -25,6 +26,11 @@ from app.providers.base import (
     get_provider_class,
     register_provider,
 )
+
+#: Adapters that accept an injected ``httpx.AsyncClient``. Only these can take
+#: the caller-supplied client, so the factory stays explicit about who owns the
+#: connection pool.
+_CLIENT_AWARE_PROVIDERS = frozenset({"openai_compat", "gemini"})
 
 
 def provider_default_capabilities(name: str) -> ProviderCapabilities:
@@ -47,7 +53,7 @@ def create_chat_provider(
         "base_url": row.base_url,
         "default_params": dict(row.params_json or {}),
     }
-    if client is not None and row.provider == "openai_compat":
+    if client is not None and row.provider in _CLIENT_AWARE_PROVIDERS:
         kwargs["client"] = client
     provider = cls(**kwargs)
     provider.capabilities = cls.default_capabilities.for_model(

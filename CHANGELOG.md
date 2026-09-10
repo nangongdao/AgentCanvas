@@ -173,6 +173,23 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   validation report, model/usage readout, and an optional "modify the current
   canvas" mode. The demo (mock) Provider answers the copilot prompt with a
   canned but valid workflow, so the feature is demonstrable without an API key.
+- Google Gemini provider: a native `gemini` adapter for the Generative Language
+  API. Gemini is the one target the OpenAI-compatible client cannot cover — it
+  needs its own request envelope (`contents` / `systemInstruction` /
+  `generationConfig`), its own `x-goog-api-key` auth header, and its own SSE
+  shape — so a Gemini model config previously had to masquerade as an OpenAI
+  endpoint and silently lose the system prompt. The adapter maps the unified
+  message shapes onto Gemini's, hoists system messages into
+  `systemInstruction`, turns `json_mode` into
+  `generationConfig.responseMimeType`, and translates `functionCall` parts back
+  into the shared tool-call stream. Because Gemini repeats a cumulative
+  `usageMetadata` on every chunk, usage is emitted once at end of stream rather
+  than per chunk, which the shared merge step would otherwise sum into a
+  multiple of the real total. DeepSeek, vLLM and other OpenAI-compatible
+  servers keep using the `openai_compat` adapter with a custom base URL. The
+  provider list served by `GET /api/models` and
+  `/api/models/provider-capabilities` is derived from the registry, so no
+  contract change accompanied it.
 
 ### Changed
 

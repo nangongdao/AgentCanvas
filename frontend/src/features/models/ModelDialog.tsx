@@ -11,6 +11,18 @@ import type {
 import { useDialogFocus } from "@/components/useDialogFocus";
 import { ModelCapabilitiesEditor } from "@/features/models/ModelCapabilitiesEditor";
 
+/**
+ * Default endpoint per provider, shown as the Base URL hint. Adapters that ship
+ * their own default (ollama, gemini, openai_compat) can be left blank; the
+ * placeholder just tells the operator what "blank" resolves to.
+ */
+const BASE_URL_PLACEHOLDERS: Record<string, string> = {
+  anthropic: "https://api.anthropic.com",
+  openai_compat: "https://api.openai.com/v1",
+  gemini: "https://generativelanguage.googleapis.com",
+  ollama: "http://127.0.0.1:11434",
+};
+
 export function ModelDialog({
   model,
   providerDescriptors,
@@ -134,7 +146,7 @@ export function ModelDialog({
               value={modelName}
               onChange={(event) => setModelName(event.target.value)}
               className="field-input"
-              placeholder="例如 claude-sonnet-5 / gpt-4o-mini"
+              placeholder="例如 claude-sonnet-5 / gpt-4o-mini / gemini-2.5-flash"
             />
           </Field>
           <Field label="Base URL（可选）">
@@ -142,7 +154,7 @@ export function ModelDialog({
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
               className="field-input"
-              placeholder="https://api.anthropic.com"
+              placeholder={BASE_URL_PLACEHOLDERS[provider] ?? "https://api.example.com/v1"}
             />
           </Field>
           <Field label={model ? "API Key / Secret Reference（留空则不变）" : "API Key / Secret Reference（可选）"}>
