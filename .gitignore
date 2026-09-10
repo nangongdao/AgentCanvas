@@ -47,3 +47,4 @@ logs/
 # --- Local runtime state ---
 data/
 .claude/settings.local.json
+.workbuddy/

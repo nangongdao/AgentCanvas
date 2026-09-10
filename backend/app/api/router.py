@@ -32,6 +32,7 @@ from app.api.routes import (
     workflow_api,
     workflow_callbacks,
     workflow_collaboration,
+    workflow_copilot,
     workflow_reviews,
     workflow_schedules,
     workflow_transfer,
@@ -50,6 +51,7 @@ api_router.include_router(templates.router)
 api_router.include_router(usage.router)
 api_router.include_router(workflow_transfer.router)
 api_router.include_router(workflow_collaboration.router)
+api_router.include_router(workflow_copilot.router)
 api_router.include_router(workflow_reviews.router)
 api_router.include_router(workflows.router)
 api_router.include_router(workflow_versions.router)

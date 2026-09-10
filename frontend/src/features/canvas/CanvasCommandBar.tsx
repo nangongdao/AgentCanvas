@@ -13,6 +13,7 @@ import { ExecutionHistory } from "@/features/execution/ExecutionHistory";
 import { CanvasObjectActions } from "@/features/canvas/CanvasObjectActions";
 import { ClipboardActions } from "@/features/canvas/ClipboardActions";
 import { CanvasLayoutMenu } from "@/features/canvas/CanvasLayoutMenu";
+import { CopilotDialog } from "@/features/canvas/CopilotDialog";
 import type {
   AlignmentMode,
   DistributionMode,
@@ -171,6 +172,12 @@ export function CanvasCommandBar(props: Props) {
       <WorkflowVariablesDialog
         canEdit={props.canEdit}
         editingAllowed={props.editingAllowed}
+      />
+
+      <CopilotDialog
+        canEdit={props.canEdit}
+        editingAllowed={props.editingAllowed}
+        onNotify={props.onNotify}
       />
 
       <CanvasLayoutMenu

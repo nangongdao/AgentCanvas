@@ -126,13 +126,13 @@ export function AuditLogsPage() {
   };
 
   return (
-    <div className="ambient-stage flex h-full w-full flex-col bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full flex-col text-ice">
       <header role="presentation" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="flex h-8 w-8 items-center justify-center text-warn">
           <ScrollText size={18} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
+          <h1 className="workspace-page-title">
             AgentCanvas Audit Log
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">
@@ -253,7 +253,7 @@ export function AuditLogsPage() {
           <span>scope / metadata</span>
         </div>
 
-        <section aria-label="审计事件" className="min-h-0 flex-1 overflow-auto">
+        <section aria-label="审计事件" tabIndex={0} className="min-h-0 flex-1 overflow-auto">
           {loading && entries.length === 0 ? (
             <div className="flex h-32 items-center justify-center gap-2 text-ghost/60">
               <Loader2 size={14} className="animate-spin" />

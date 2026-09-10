@@ -2401,6 +2401,127 @@
         "title": "CollaborationSnapshotOut",
         "type": "object"
       },
+      "CopilotDraftOut": {
+        "description": "A drafted workflow plus the validator's verdict on it.\n\n``valid`` is the graph verdict, not the schema verdict: a document that\nmatches the DSL schema but fails reachability/cycle checks still returns\n200 with ``valid=False`` and the errors, so the user can repair it instead\nof losing the draft.",
+        "properties": {
+          "attempts": {
+            "default": 1,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "dsl": {
+            "additionalProperties": true,
+            "title": "Dsl",
+            "type": "object"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CopilotUsageOut"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dsl",
+          "name",
+          "valid",
+          "provider",
+          "model"
+        ],
+        "title": "CopilotDraftOut",
+        "type": "object"
+      },
+      "CopilotDraftRequest": {
+        "description": "A natural-language request for a workflow draft (AI Copilot).\n\n``base_dsl`` is the current canvas when the user wants the draft to modify\nan existing workflow rather than start from nothing; ``model_config_id``\nselects which chat model does the planning.",
+        "properties": {
+          "base_dsl": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Dsl"
+          },
+          "model_config_id": {
+            "default": "default",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Config Id",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "CopilotDraftRequest",
+        "type": "object"
+      },
+      "CopilotUsageOut": {
+        "properties": {
+          "completion_tokens": {
+            "default": 0,
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "prompt_tokens": {
+            "default": 0,
+            "title": "Prompt Tokens",
+            "type": "integer"
+          }
+        },
+        "title": "CopilotUsageOut",
+        "type": "object"
+      },
       "CostAlertOut": {
         "properties": {
           "actual_value": {
@@ -10488,6 +10609,47 @@
           "variables_changed"
         ],
         "title": "WorkflowDiffOut",
+        "type": "object"
+      },
+      "WorkflowEvaluationPolicyIn": {
+        "description": "Optional eval gate attached to a workflow (Backlog: publish gate).",
+        "properties": {
+          "dataset_version_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Dataset Version Id",
+            "type": "string"
+          },
+          "threshold": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dataset_version_id"
+        ],
+        "title": "WorkflowEvaluationPolicyIn",
+        "type": "object"
+      },
+      "WorkflowEvaluationPolicyOut": {
+        "properties": {
+          "dataset_version_id": {
+            "title": "Dataset Version Id",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dataset_version_id",
+          "threshold"
+        ],
+        "title": "WorkflowEvaluationPolicyOut",
         "type": "object"
       },
       "WorkflowExportOut": {
@@ -20429,6 +20591,48 @@
         ]
       }
     },
+    "/api/workflows/copilot/draft": {
+      "post": {
+        "description": "Draft a workflow from a prompt and return it with the validator's verdict.\n\nThe draft is never persisted: the editor applies it (or not) through the\nnormal save path, so the copilot cannot bypass validation or audit.",
+        "operationId": "draft_workflow_endpoint_api_workflows_copilot_draft_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopilotDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotDraftOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Workflow Endpoint",
+        "tags": [
+          "copilot"
+        ]
+      }
+    },
     "/api/workflows/import": {
       "post": {
         "operationId": "import_workflow_api_workflows_import_post",
@@ -21709,6 +21913,107 @@
         "summary": "Dry Run Node",
         "tags": [
           "executions"
+        ]
+      }
+    },
+    "/api/workflows/{workflow_id}/evaluation-policy": {
+      "get": {
+        "operationId": "get_evaluation_policy_api_workflows__workflow_id__evaluation_policy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkflowEvaluationPolicyOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Evaluation Policy Api Workflows  Workflow Id  Evaluation Policy Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Evaluation Policy",
+        "tags": [
+          "workflow versions"
+        ]
+      },
+      "put": {
+        "description": "Attach (or clear by threshold=0) the publish eval gate to a workflow.",
+        "operationId": "set_evaluation_policy_api_workflows__workflow_id__evaluation_policy_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowEvaluationPolicyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowEvaluationPolicyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Evaluation Policy",
+        "tags": [
+          "workflow versions"
         ]
       }
     },

@@ -95,13 +95,13 @@ export function ModelsPage() {
   };
 
   return (
-    <div className="ambient-stage flex h-full w-full min-w-0 flex-col overflow-x-hidden bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full min-w-0 flex-col overflow-x-hidden text-ice">
       <header role="presentation" className="glass relative z-20 flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="flex h-8 w-8 items-center justify-center text-volt">
           <Settings2 size={18} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
+          <h1 className="workspace-page-title">
             AgentCanvas Models
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">

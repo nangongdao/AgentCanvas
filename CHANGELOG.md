@@ -160,6 +160,19 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   app, session, message, citation, document, knowledge-base, project, and link
   token ownership before serving the original file. Application usage now
   reports referenced/available citation counts and citation coverage.
+- Workflow AI Copilot (backlog): `POST /api/workflows/copilot/draft` turns a
+  natural-language request into a Workflow DSL draft. The prompt is assembled
+  from the live node catalog and the DSL envelope, so a new node type reaches
+  the copilot with no second edit; every reply is round-tripped through the same
+  `validate_dsl` gate the editor and the compiler use, and a rejected draft is
+  repaired in a bounded loop that shows the model the exact validator errors.
+  A draft that is schema-valid but graph-invalid is returned with its verdict
+  rather than dropped, and cannot be applied. Drafts are never persisted: the
+  editor applies one through the normal save path as a single undoable canvas
+  change. The canvas gains an "AI Copilot" panel with a preview, node list,
+  validation report, model/usage readout, and an optional "modify the current
+  canvas" mode. The demo (mock) Provider answers the copilot prompt with a
+  canned but valid workflow, so the feature is demonstrable without an API key.
 
 ### Changed
 

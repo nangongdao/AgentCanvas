@@ -9,6 +9,7 @@ from typing import Any
 
 from app.core.provider_capabilities import CapabilityName, ProviderCapabilities
 from app.providers.base import (
+    COPILOT_PROMPT_MARKER,
     BaseChatProvider,
     ChatMessage,
     StreamChunk,
@@ -60,6 +61,67 @@ def _mock_json_reply(params: Mapping[str, Any]) -> str:
         "reason": "mock response",
     }
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+# A minimal but fully valid workflow: exactly one start, one end, reachable from
+# start, no cycles, every config within its node schema. Used only as the demo
+# adapter's answer to the copilot so the feature is demonstrable without an API
+# key — it is a stand-in, never presented as a model's plan.
+_MOCK_COPILOT_DSL: dict[str, Any] = {
+    "version": "1.0",
+    "name": "示例工作流(Mock)",
+    "variables": [],
+    "settings": {"max_loop_iterations": 20, "timeout_seconds": 300, "recursion_limit": 50},
+    "nodes": [
+        {
+            "id": "start",
+            "type": "start",
+            "name": "开始",
+            "position": {"x": 0, "y": 0},
+            "config": {
+                "input_schema": [
+                    {"name": "user_query", "type": "string", "required": True, "default": None}
+                ]
+            },
+        },
+        {
+            "id": "agent",
+            "type": "agent",
+            "name": "智能体",
+            "position": {"x": 320, "y": 0},
+            "config": {
+                "model_config_id": "default",
+                "system_prompt": "你是一个有帮助的助手。",
+                "user_prompt": "{{input.user_query}}",
+            },
+        },
+        {
+            "id": "end",
+            "type": "end",
+            "name": "结束",
+            "position": {"x": 640, "y": 0},
+            "config": {"output_template": {"answer": "{{nodes.agent.output}}"}},
+        },
+    ],
+    "edges": [
+        {"id": "edge-start-agent", "source": "start", "target": "agent"},
+        {"id": "edge-agent-end", "source": "agent", "target": "end"},
+    ],
+    "canvas": {"groups": [], "notes": []},
+}
+
+
+def _mock_copilot_reply(messages: Sequence[ChatMessage]) -> str | None:
+    """Answer the workflow-copilot prompt with a canned valid DSL draft.
+
+    Returns ``None`` for every other request so normal mock behaviour is
+    untouched; the copilot reply is only produced when its system prompt
+    carries :data:`COPILOT_PROMPT_MARKER`.
+    """
+    for message in messages:
+        if message.role == "system" and COPILOT_PROMPT_MARKER in (message.content or ""):
+            return json.dumps(_MOCK_COPILOT_DSL, ensure_ascii=False, separators=(",", ":"))
+    return None
 
 
 @register_provider("mock")
@@ -114,6 +176,18 @@ class MockChatProvider(BaseChatProvider):
             yield StreamChunk(
                 type="usage",
                 usage=Usage(prompt_tokens=len(user), completion_tokens=1),
+            )
+            yield StreamChunk(type="done")
+            return
+        copilot_reply = _mock_copilot_reply(messages)
+        if copilot_reply is not None:
+            # A copilot draft is consumed whole (parsed as JSON), never rendered
+            # token-by-token to a human, so the per-character demo pacing would
+            # only make the request slow.
+            yield StreamChunk(type="text", text=copilot_reply)
+            yield StreamChunk(
+                type="usage",
+                usage=Usage(prompt_tokens=len(user), completion_tokens=len(copilot_reply)),
             )
             yield StreamChunk(type="done")
             return

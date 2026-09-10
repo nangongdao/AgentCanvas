@@ -2538,6 +2538,27 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/workflows/{workflow_id}/evaluation-policy": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** Get Evaluation Policy */
+        readonly get: operations["get_evaluation_policy_api_workflows__workflow_id__evaluation_policy_get"];
+        /**
+         * Set Evaluation Policy
+         * @description Attach (or clear by threshold=0) the publish eval gate to a workflow.
+         */
+        readonly put: operations["set_evaluation_policy_api_workflows__workflow_id__evaluation_policy_put"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/workflows/{workflow_id}/executions": {
         readonly parameters: {
             readonly query?: never;
@@ -2781,6 +2802,29 @@ export interface paths {
         readonly head?: never;
         /** Update Webhook */
         readonly patch: operations["update_webhook_api_workflows__workflow_id__webhook_patch"];
+        readonly trace?: never;
+    };
+    readonly "/api/workflows/copilot/draft": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Draft Workflow Endpoint
+         * @description Draft a workflow from a prompt and return it with the validator's verdict.
+         *
+         *     The draft is never persisted: the editor applies it (or not) through the
+         *     normal save path, so the copilot cannot bypass validation or audit.
+         */
+        readonly post: operations["draft_workflow_endpoint_api_workflows_copilot_draft_post"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
         readonly trace?: never;
     };
     readonly "/api/workflows/import": {
@@ -3736,6 +3780,75 @@ export interface components {
             readonly revision: number;
             /** Workflow Id */
             readonly workflow_id: string;
+        };
+        /**
+         * CopilotDraftOut
+         * @description A drafted workflow plus the validator's verdict on it.
+         *
+         *     ``valid`` is the graph verdict, not the schema verdict: a document that
+         *     matches the DSL schema but fails reachability/cycle checks still returns
+         *     200 with ``valid=False`` and the errors, so the user can repair it instead
+         *     of losing the draft.
+         */
+        readonly CopilotDraftOut: {
+            /**
+             * Attempts
+             * @default 1
+             */
+            readonly attempts: number;
+            /** Dsl */
+            readonly dsl: {
+                readonly [key: string]: unknown;
+            };
+            /** Errors */
+            readonly errors?: readonly string[];
+            /** Model */
+            readonly model: string;
+            /** Name */
+            readonly name: string;
+            /** Provider */
+            readonly provider: string;
+            readonly usage?: components["schemas"]["CopilotUsageOut"];
+            /** Valid */
+            readonly valid: boolean;
+            /** Warnings */
+            readonly warnings?: readonly string[];
+        };
+        /**
+         * CopilotDraftRequest
+         * @description A natural-language request for a workflow draft (AI Copilot).
+         *
+         *     ``base_dsl`` is the current canvas when the user wants the draft to modify
+         *     an existing workflow rather than start from nothing; ``model_config_id``
+         *     selects which chat model does the planning.
+         */
+        readonly CopilotDraftRequest: {
+            /** Base Dsl */
+            readonly base_dsl?: {
+                readonly [key: string]: unknown;
+            } | null;
+            /**
+             * Model Config Id
+             * @default default
+             */
+            readonly model_config_id: string;
+            /** Project Id */
+            readonly project_id?: string | null;
+            /** Prompt */
+            readonly prompt: string;
+        };
+        /** CopilotUsageOut */
+        readonly CopilotUsageOut: {
+            /**
+             * Completion Tokens
+             * @default 0
+             */
+            readonly completion_tokens: number;
+            /**
+             * Prompt Tokens
+             * @default 0
+             */
+            readonly prompt_tokens: number;
         };
         /** CostAlertOut */
         readonly CostAlertOut: {
@@ -6597,6 +6710,26 @@ export interface components {
             readonly required: boolean;
             /** @default string */
             readonly type: components["schemas"]["WorkflowDSLVariableType"];
+        };
+        /**
+         * WorkflowEvaluationPolicyIn
+         * @description Optional eval gate attached to a workflow (Backlog: publish gate).
+         */
+        readonly WorkflowEvaluationPolicyIn: {
+            /** Dataset Version Id */
+            readonly dataset_version_id: string;
+            /**
+             * Threshold
+             * @default 0.8
+             */
+            readonly threshold: number;
+        };
+        /** WorkflowEvaluationPolicyOut */
+        readonly WorkflowEvaluationPolicyOut: {
+            /** Dataset Version Id */
+            readonly dataset_version_id: string;
+            /** Threshold */
+            readonly threshold: number;
         };
         /** WorkflowExportOut */
         readonly WorkflowExportOut: {
@@ -13233,6 +13366,72 @@ export interface operations {
             };
         };
     };
+    readonly get_evaluation_policy_api_workflows__workflow_id__evaluation_policy_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly workflow_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["WorkflowEvaluationPolicyOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly set_evaluation_policy_api_workflows__workflow_id__evaluation_policy_put: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly workflow_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["WorkflowEvaluationPolicyIn"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["WorkflowEvaluationPolicyOut"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     readonly list_executions_api_workflows__workflow_id__executions_get: {
         readonly parameters: {
             readonly query?: {
@@ -13933,6 +14132,39 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["WebhookTriggerOut"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly draft_workflow_endpoint_api_workflows_copilot_draft_post: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["CopilotDraftRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["CopilotDraftOut"];
                 };
             };
             /** @description Validation Error */

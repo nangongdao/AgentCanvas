@@ -139,7 +139,7 @@ export function MembersPage() {
   };
 
   return (
-    <div className="ambient-stage flex h-full w-full flex-col overflow-hidden bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full flex-col overflow-hidden text-ice">
       <header
         role="presentation"
         className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5"
@@ -148,7 +148,7 @@ export function MembersPage() {
           <Users size={18} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
+          <h1 className="workspace-page-title">
             成员与邀请
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">

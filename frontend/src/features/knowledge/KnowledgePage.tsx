@@ -86,14 +86,14 @@ export function KnowledgePage() {
   };
 
   return (
-    <div className="ambient-stage flex h-full w-full flex-col bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full flex-col text-ice">
       <header role="presentation" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="relative flex h-8 w-8 items-center justify-center text-ok">
           <Hexagon size={27} strokeWidth={1.2} />
           <Database size={11} className="absolute" />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
+          <h1 className="workspace-page-title">
             AgentCanvas Knowledge
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">

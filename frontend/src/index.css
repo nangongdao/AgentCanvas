@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './features/shell/workspace.css';
 
 /*
   C5-8: surface color tokens. Accent colors (pulse/volt/ok/bad/warn) are
@@ -7,45 +8,124 @@
   `agentcanvas:theme` and `prefers-color-scheme`), so there is no flash.
 */
 :root {
-  --void: #04060c;
-  --ink: #0a0e18;
-  --line: #151b2b;
-  --ghost: #8b93a7;
-  --ice: #e8ecf4;
-  --bg-void: #04060c;
-  --surface-glass: rgba(10, 14, 24, 0.72);
-  --surface-glass-border: rgba(21, 27, 43, 0.9);
-  --rf-bg: #04060c;
-  --rf-controls-bg: rgba(10, 14, 24, 0.85);
-  --rf-minimap-bg: rgba(10, 14, 24, 0.85);
-  --rf-minimap-mask: rgba(4, 6, 12, 0.82);
+  /* Surface ladder: void (canvas) -> ink (surface) -> raise (inset, hovered
+     rows, inputs, tiles). Depth is expressed by stepping through these three,
+     never by stacking drop shadows.
+
+     The dark ladder is deliberately chromatic. A neutral grey ramp is exactly
+     what makes a dark console read as "yet another dark admin theme": the eye
+     gets no material cue, only lightness. So each step also drifts in hue —
+     void is a violet-leaning black (~235deg), ink a bluer panel (~232deg),
+     raise a colder inset (~228deg). The stack then reads as one lit surface
+     instead of three flat fills, and the cyan brand accent (~187deg) lands as
+     a real complement rather than more blue-grey on blue-grey. */
+  --void: #060810;
+  --ink: #0b0e1c;
+  --raise: #161c30;
+  /* Hairline. Must stay legible or the whole layout reads as soup — a dark UI
+     with invisible borders has no structure to give depth to. */
+  --line: #1e2440;
+  --line-soft: #14182a;
+  --line-strong: #2c3450;
+  --ghost: #909ab2;
+  --ice: #eaeefb;
+  --bg-void: #060810;
+  --surface-glass: rgba(10, 13, 26, 0.72);
+  --surface-glass-border: rgba(30, 36, 64, 0.9);
+  /* Chrome is translucent so the backdrop survives as a blurred gradient.
+     Fully opaque chrome is what turns a dark shell into a wireframe. */
+  --chrome-bg: rgba(9, 11, 23, 0.72);
+  --chrome-blur: blur(14px) saturate(150%);
+  /* Panels catch light from above. A 5.5% sheen that fades out before the
+     first content row is the cheapest "physical surface" cue there is, and
+     unlike a border it survives the surface colour changing. */
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0) 54%);
+  /* Inputs and wells are recessed, not raised: a short inset shadow is the
+     only cue that reads as "below the surface". */
+  --inset-well: inset 0 1px 2px rgba(2, 3, 10, 0.45);
+  /* One composited backdrop for the whole shell: fine grain over three
+     out-of-frame lights. The grain blends in `overlay`, where 50% grey is
+     neutral, so it modulates the lights instead of washing out near-black —
+     and it is what stops the large radial gradients from banding on 8-bit
+     panels. Order is load-bearing: image, repeat, size and blend lists all run
+     1:1 against the layers, so any layer added here needs a value in all four. */
+  --stage-layers:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(1100px 620px at 6% -14%, rgba(34, 211, 238, 0.11), transparent 62%),
+    radial-gradient(900px 560px at 104% 0%, rgba(139, 92, 246, 0.1), transparent 64%),
+    radial-gradient(1400px 720px at 46% 120%, rgba(34, 211, 238, 0.06), transparent 66%);
+  --stage-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  --stage-size: 200px 200px, auto, auto, auto;
+  --stage-blend: overlay, normal, normal, normal;
+  --rf-bg: #060810;
+  --rf-controls-bg: rgba(11, 14, 28, 0.85);
+  --rf-minimap-bg: rgba(11, 14, 28, 0.85);
+  --rf-minimap-mask: rgba(6, 8, 16, 0.82);
   --rf-edge: #2c374f;
   --rf-edge-selected: #22d3ee;
   --rf-bg-dots: #1a2235;
-  --scrollbar: #1c2437;
-  --scrollbar-hover: #2c374f;
+  --scrollbar: #1e2440;
+  --scrollbar-hover: #333c5e;
   --selection-bg: rgba(34, 211, 238, 0.3);
   --selection-color: #fff;
-  --outline-stroke: rgba(139, 147, 167, 0.14);
+  --outline-stroke: rgba(144, 154, 178, 0.16);
   --focus-ring: #22d3ee;
-  /* Accent colors tuned for dark surfaces. */
+  /* Accent colors stay fixed: they are shared with the canvas node semantics
+     and with light mode's darker AA-compliant variants. */
   --accent-pulse: #22d3ee;
   --accent-volt: #8b5cf6;
   --accent-ok: #34d399;
   --accent-bad: #fb7185;
   --accent-warn: #fbbf24;
+  /* Elevation ladder. Levels 1-2 belong to resting surfaces, 2-3 to raised
+     chrome, 4 to overlays. Every level stacks a small contact shadow with a
+     wide, low-opacity ambient one instead of a single heavy blur, and the
+     shadow is tinted with the void hue rather than pure black — a neutral
+     black shadow on a blue-violet floor reads as a grey halo. */
+  --elev-1: 0 1px 2px -1px rgba(2, 3, 10, 0.5);
+  --elev-2: 0 1px 1px rgba(2, 3, 10, 0.3), 0 2px 4px -2px rgba(2, 3, 10, 0.4),
+    0 12px 28px -16px rgba(2, 3, 10, 0.62);
+  --elev-3: 0 2px 6px -2px rgba(2, 3, 10, 0.46), 0 16px 36px -16px rgba(2, 3, 10, 0.64);
+  --elev-4: 0 1px 1px rgba(2, 3, 10, 0.34), 0 12px 24px -8px rgba(2, 3, 10, 0.5),
+    0 36px 72px -24px rgba(2, 3, 10, 0.72);
+  /* One motion scale for the whole product. */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 280ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Radius scale: badge < tile/field < panel. Pills are reserved for tags, and
+     the primary button is deliberately never one. */
+  --radius-badge: 6px;
+  --radius-tile: 8px;
+  --radius-field: 8px;
+  --radius-panel: 12px;
   color-scheme: dark;
 }
 
 [data-theme='light'] {
   --void: #f6f8fb;
   --ink: #ffffff;
+  --raise: #eef1f8;
   --line: #e1e6ef;
   --ghost: #3f4654;
   --ice: #161c2a;
   --bg-void: #f6f8fb;
   --surface-glass: rgba(255, 255, 255, 0.82);
   --surface-glass-border: rgba(209, 216, 228, 0.9);
+  /* Light keeps the same token surface, neutralised. A white panel already
+     reads as a lit surface, so the sheen, the aurora and the grain that give
+     the dark theme its depth would only dirty it. */
+  --line-soft: #eef1f7;
+  --line-strong: #d3dae6;
+  --chrome-bg: rgba(255, 255, 255, 0.82);
+  --chrome-blur: blur(14px) saturate(140%);
+  --sheen: none;
+  --inset-well: inset 0 1px 2px rgba(16, 24, 40, 0.06);
+  --stage-layers: none;
+  --stage-repeat: no-repeat;
+  --stage-size: auto;
+  --stage-blend: normal;
   --rf-bg: #f6f8fb;
   --rf-controls-bg: rgba(255, 255, 255, 0.9);
   --rf-minimap-bg: rgba(255, 255, 255, 0.9);
@@ -66,15 +146,43 @@
   --accent-ok: #065f46;
   --accent-bad: #9f1239;
   --accent-warn: #92400e;
+  /* Light surfaces keep the same stacked shadow structure at far lower
+     opacity — a dark-mode shadow reads as a grey halo on white. */
+  --elev-1: 0 1px 2px -1px rgba(16, 24, 40, 0.08);
+  --elev-2: 0 1px 1px rgba(16, 24, 40, 0.04), 0 2px 4px -2px rgba(16, 24, 40, 0.06),
+    0 10px 24px -16px rgba(16, 24, 40, 0.18);
+  --elev-3: 0 2px 6px -3px rgba(16, 24, 40, 0.08), 0 14px 32px -16px rgba(16, 24, 40, 0.2);
+  --elev-4: 0 1px 1px rgba(16, 24, 40, 0.05), 0 12px 24px -8px rgba(16, 24, 40, 0.12),
+    0 36px 64px -24px rgba(16, 24, 40, 0.22);
   color-scheme: light;
 }
 
 @theme {
-  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /*
+    Typography: Noto Sans SC carries the full Simplified-Chinese + Latin range
+    so a bilingual console never mixes two incompatible letterforms inside a
+    single sentence, and JetBrains Mono carries telemetry, identifiers and code.
+
+    Noto Sans SC is a variable font (weight 100-900). Because it ships complete
+    CJK and Latin glyph sets, `font-sans` can be one family with no
+    script-specific fallback stack. Registering it as `--font-sans` also
+    redirects Tailwind's preflight default, so anything without an explicit
+    family inherits it instead of the system stack.
+  */
+  --font-sans: 'Noto Sans SC', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Noto Sans SC', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Tracking scale. Latin tightens at display sizes, but CJK is far more
+     sensitive to negative tracking, so the values stay well inside the safe
+     range and small uppercase labels open up instead. */
+  --tracking-display: -0.018em;
+  --tracking-title: -0.006em;
+  --tracking-label: 0.08em;
 
   --color-void: var(--void);
   --color-ink: var(--ink);
+  --color-raise: var(--raise);
   --color-line: var(--line);
   --color-ghost: var(--ghost);
   --color-ice: var(--ice);
@@ -93,7 +201,13 @@
   --shadow-glow-ok: 0 0 20px -6px rgba(52, 211, 153, 0.55);
   --shadow-glow-bad: 0 0 20px -6px rgba(251, 113, 133, 0.6);
   --shadow-glow-amber: 0 0 18px -7px rgba(251, 191, 36, 0.5);
-  --shadow-card: 0 8px 32px -12px rgba(0, 0, 0, 0.8);
+  /* The elevation ladder itself lives in :root so both themes, and the raw
+     `var(--elev-*)` references in workspace.css, resolve to the same values. */
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
+  --shadow-elev-4: var(--elev-4);
+  --shadow-card: var(--elev-4);
 
   --animate-pulse-ring: pulseRing 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-dash-flow: dashFlow 0.8s linear infinite;
@@ -172,6 +286,7 @@
 
 @utility field-input {
   @apply w-full rounded-lg border border-line bg-void/70 px-3 py-2 text-xs text-ice outline-hidden transition placeholder:text-ghost/35 focus:border-pulse/60;
+  box-shadow: var(--inset-well);
 }
 
 @layer utilities {
@@ -188,11 +303,48 @@
   }
 
   body {
-    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-sans);
+    /* Noto Sans SC is a variable font, so weight is the only axis to keep
+       smooth. Numerals are aligned per data role (`type-data`, `font-mono`)
+       rather than globally, because tabular figures look wrong in prose. */
+    font-kerning: normal;
     background: var(--bg-void);
     color: var(--ice);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Headings wrap on meaning, not on the last word. */
+  :where(h1, h2, h3) {
+    text-wrap: balance;
+  }
+
+  /* Tracking scale for the three type roles this product uses. Display and
+     title keep the tight Latin rhythm; `type-label` opens up for small
+     uppercase mono runs. */
+  .type-display {
+    font-family: var(--font-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .type-title {
+    font-family: var(--font-display);
+    letter-spacing: var(--tracking-title);
+  }
+  .type-label {
+    font-family: var(--font-sans);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+  .type-data {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Every display heading shares one tracking value, so headings added later
+     inherit the system without opting in. Complements Tailwind's generated
+     `.font-display` (which only sets family), so nothing is overridden. */
+  .font-display {
+    letter-spacing: var(--tracking-title);
   }
 
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
@@ -435,6 +587,29 @@
   border: 1px solid var(--surface-glass-border);
 }
 
+/* ---------- shell backdrop ----------
+ * One backdrop for the entire shell: the aurora lights plus the grain layer,
+ * composited once, behind every routed surface. Routed pages therefore do not
+ * paint their own `bg-void` — they stay transparent so this backdrop, and the
+ * blurred chrome sitting on top of it, stay continuous across the seam. */
+.platform-shell {
+  background-color: var(--void);
+  background-image: var(--stage-layers);
+  background-repeat: var(--stage-repeat);
+  background-size: var(--stage-size);
+  background-blend-mode: var(--stage-blend);
+}
+
+/* Translucent chrome: header and rail blur whatever the backdrop puts behind
+ * them instead of covering it with an opaque fill. Only the unprefixed
+ * property is written here — the build adds the -webkit- prefix itself, and
+ * declaring both by hand makes the minifier dedupe them and keep the prefixed
+ * one, which would drop the effect in Firefox. */
+.workspace-chrome {
+  background: var(--chrome-bg);
+  backdrop-filter: var(--chrome-blur);
+}
+
 /* ---------- streaming caret ---------- */
 .stream-caret::after {
   content: "▍";
@@ -449,9 +624,10 @@
   }
 }
 
-/* ---------- text glitch accent on hover ---------- */
+/* ---------- product wordmark ---------- */
 .brand-title {
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-title);
+  font-optical-sizing: auto;
   color: var(--ice);
 }
 

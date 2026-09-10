@@ -13,6 +13,7 @@ from app.providers import mock_provider as _mock  # noqa: F401
 from app.providers import ollama_provider as _ollama  # noqa: F401
 from app.providers import openai_provider as _openai  # noqa: F401
 from app.providers.base import (
+    COPILOT_PROMPT_MARKER,
     PROVIDERS,
     BaseChatProvider,
     ChatMessage,
@@ -66,6 +67,7 @@ def create_chat_provider(
 
 
 __all__ = [
+    "COPILOT_PROMPT_MARKER",
     "PROVIDERS",
     "BaseChatProvider",
     "ChatMessage",

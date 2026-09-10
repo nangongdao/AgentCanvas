@@ -69,7 +69,7 @@
 
 | 位置 | 现状 | 桌面影响 |
 |---|---|---|
-| `frontend/index.html:8-13` | 字体走 Google Fonts CDN(`fonts.googleapis.com`) | **离线首启会 fallback 到系统字体**,整个视觉语言崩塌。必须自托管 Space Grotesk + JetBrains Mono |
+| `frontend/index.html:8-13` | 字体走 Google Fonts CDN(`fonts.googleapis.com`) | **离线首启会 fallback 到系统字体**,整个视觉语言崩塌。必须自托管 Noto Sans SC + JetBrains Mono |
 | `api/sse.ts:86,200`、`useWorkflowCollaboration.ts:158` | 三处 `new EventSource` | Tauri 页面 origin 为 `tauri://localhost`,访问 `127.0.0.1:8000` 是**跨源**;后端 CORS 必须显式放行,且 `EventSource` 不带自定义头 |
 | `AuthProvider.tsx:140` | OIDC 走 `window.location.assign("/api/auth/oidc/start")` | 桌面无浏览器 redirect 回跳;需改为系统浏览器打开 + 本地回调端口或 deep link |
 | `AuthProvider.tsx:100,115` | 两处 `window.location.reload()` | Tauri 下可用但语义粗糙,应改为路由级状态重置 |
@@ -299,7 +299,7 @@ C8 落地了站点级安全头与 HSTS。桌面下:
 
 ### 7.2 必须新做的优化
 
-1. **字体自托管**(C9-5,也是 2.3 的必修项):Space Grotesk + JetBrains Mono 子集化(拉丁 + 中文标点),woff2,`preload`。Web 部署同样受益,顺带去掉两个 `preconnect` 与一个第三方阻塞请求。
+1. **字体自托管**(C9-5,也是 2.3 的必修项):Noto Sans SC + JetBrains Mono 子集化(中文常用字 + 拉丁 + 中文标点),woff2,`preload`。Web 部署同样受益,顺带去掉两个 `preconnect` 与一个第三方阻塞请求。注意 Noto Sans SC 的 CJK 子集体积远大于拉丁字体,必须按使用字符集裁剪,不能整字重全量内嵌。
 2. **启动时间**:sidecar 冷启动是桌面版最大的体感风险。**排除 chromadb 依赖树后此风险显著下降**(见 13.4:不再 import chromadb/onnxruntime/numpy/grpc)。剩余手段:延迟导入非首屏依赖、窗口先显示骨架而非等后端就绪、用 `/readyz` 返回体的 `checks` 分项渲染启动进度(已有能力,见 13.2)。
 3. **终端吞吐**:PTY 输出经 Channel 传输 + 前端批量写入(按帧聚合而非逐 chunk `write`),避免高吞吐输出时主线程被打满。
 4. **不引入动画库**:见 6.3 第 2 条。bundle 预算不动。

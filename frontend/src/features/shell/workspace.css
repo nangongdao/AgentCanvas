@@ -1,0 +1,738 @@
+/* Workspace-only refinements. Canvas geometry, colors, and motion are untouched.
+   Every primitive here is shared by all routed surfaces, so changing one value
+   changes the whole product. See repo-root DESIGN.md before editing. */
+@layer components {
+  /* ---------- rail (sidebar) ---------- */
+  .workspace-rail {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    /* Translucent so the shell backdrop reads through the rail as well. Only
+       the unprefixed property is written — the build adds -webkit- itself, and
+       declaring both makes the minifier keep just the prefixed one. */
+    background: var(--chrome-bg);
+    backdrop-filter: var(--chrome-blur);
+  }
+  .workspace-brand {
+    display: flex;
+    height: 56px;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+    padding-inline: 14px;
+    color: var(--ice);
+  }
+  .workspace-brand-mark {
+    position: relative;
+    display: flex;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--accent-pulse) 28%, transparent);
+    border-radius: var(--radius-tile);
+    background-color: color-mix(in srgb, var(--accent-pulse) 9%, transparent);
+    background-image: var(--sheen);
+    color: var(--accent-pulse);
+    transition: border-color var(--duration-base) var(--ease-in-out);
+  }
+  /* The brand mark is the one place the accent colour is allowed to emit
+     light. On light surfaces the same shadow would read as a smudge. */
+  :root:not([data-theme='light']) .workspace-brand-mark {
+    box-shadow: 0 0 22px -10px color-mix(in srgb, var(--accent-pulse) 85%, transparent);
+  }
+  .workspace-brand:hover .workspace-brand-mark {
+    border-color: color-mix(in srgb, var(--accent-pulse) 50%, transparent);
+  }
+  .workspace-brand-name {
+    min-width: 0;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+  }
+  [data-compact='true'] .workspace-brand {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  /* ---------- navigation ---------- */
+  .workspace-nav-section {
+    display: flex;
+    height: 30px;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-inline: 8px;
+    color: var(--ghost);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  /* A hairline running out of the label is the section divider, so no extra
+     rule element is needed and the rail keeps one rhythm. */
+  .workspace-nav-section::after {
+    content: '';
+    height: 1px;
+    min-width: 8px;
+    flex: 1 1 auto;
+    background: var(--line);
+  }
+  [data-compact='true'] .workspace-nav-section {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  [data-compact='true'] .workspace-nav-section::after {
+    display: none;
+  }
+  .workspace-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 5px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-field);
+    color: var(--ghost);
+    font-size: 12px;
+    line-height: 1.5;
+    transition:
+      color var(--duration-base) var(--ease-in-out),
+      background-color var(--duration-base) var(--ease-in-out),
+      border-color var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-nav-link:hover {
+    color: var(--ice);
+    background: color-mix(in srgb, var(--ghost) 7%, transparent);
+  }
+  .workspace-nav-link:active {
+    background: color-mix(in srgb, var(--ghost) 12%, transparent);
+  }
+  .workspace-nav-icon {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: none;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--radius-badge);
+    color: inherit;
+    transition:
+      color var(--duration-base) var(--ease-in-out),
+      background-color var(--duration-base) var(--ease-in-out),
+      border-color var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-nav-link:hover .workspace-nav-icon {
+    border-color: var(--line);
+    background: var(--raise);
+    color: var(--ice);
+  }
+  .workspace-nav-link[aria-current='page'] {
+    color: var(--ice);
+    background: color-mix(in srgb, var(--accent-pulse) 9%, var(--ink));
+    border-color: color-mix(in srgb, var(--accent-pulse) 22%, transparent);
+    box-shadow: inset 2px 0 0 var(--accent-pulse);
+  }
+  /* Dark current-state is a lit surface, not a tinted one: a directional
+     gradient (light entering from the left marker) plus a soft bloom, so the
+     item still reads as "energised" in a screenshot at 100%. */
+  :root:not([data-theme='light']) .workspace-nav-link[aria-current='page'] {
+    background-color: color-mix(in srgb, var(--accent-pulse) 6%, var(--ink));
+    background-image: linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--accent-pulse) 17%, transparent),
+      color-mix(in srgb, var(--accent-pulse) 0%, transparent) 68%
+    );
+    border-color: color-mix(in srgb, var(--accent-pulse) 26%, transparent);
+    box-shadow:
+      inset 2px 0 0 var(--accent-pulse),
+      0 0 24px -14px color-mix(in srgb, var(--accent-pulse) 90%, transparent);
+  }
+  .workspace-nav-link[aria-current='page']:hover {
+    background: color-mix(in srgb, var(--accent-pulse) 13%, var(--ink));
+  }
+  :root:not([data-theme='light']) .workspace-nav-link[aria-current='page']:hover {
+    background-color: color-mix(in srgb, var(--accent-pulse) 11%, var(--ink));
+  }
+  .workspace-nav-link[aria-current='page'] .workspace-nav-icon {
+    border-color: color-mix(in srgb, var(--accent-pulse) 28%, transparent);
+    background: color-mix(in srgb, var(--accent-pulse) 16%, transparent);
+    color: var(--accent-pulse);
+  }
+  [data-compact='true'] .workspace-nav-link {
+    justify-content: center;
+    min-height: 40px;
+    padding-inline: 0;
+  }
+  .workspace-rail-footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--line);
+    padding: 10px;
+  }
+  [data-compact='true'] .workspace-rail-footer {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .workspace-workspace-card {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-tile);
+    background-color: var(--raise);
+    background-image: var(--sheen);
+    box-shadow: var(--elev-1);
+    padding: 7px 8px;
+  }
+  .workspace-workspace-mark {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    place-items: center;
+    border-radius: var(--radius-badge);
+    background: color-mix(in srgb, var(--accent-pulse) 15%, transparent);
+    color: var(--accent-pulse);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* ---------- page and section chrome ---------- */
+  .workspace-page-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+    color: var(--ice);
+  }
+  @media (min-width: 640px) {
+    .workspace-page-title {
+      font-size: 16px;
+    }
+  }
+  .workspace-display-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: var(--tracking-display);
+    color: var(--ice);
+  }
+  @media (min-width: 640px) {
+    .workspace-display-title {
+      font-size: 30px;
+    }
+  }
+  .workspace-section-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+    color: var(--ice);
+  }
+  .workspace-eyebrow {
+    color: var(--ghost);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  /* ---------- surfaces ---------- */
+  .workspace-panel,
+  .overview-panel {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    /* Surface colour under, sheen over. The gradient is what makes a panel
+       read as a physical plate rather than a hole cut in the page. */
+    background-color: var(--ink);
+    background-image: var(--sheen);
+    box-shadow: var(--elev-2);
+  }
+  /* Dark surfaces get a hairline top highlight instead of a heavier drop
+     shadow; depth comes from the surface ladder, as in the reference systems. */
+  :root:not([data-theme='light']) .workspace-panel,
+  :root:not([data-theme='light']) .overview-panel {
+    box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--ice) 7%, transparent), var(--elev-2);
+  }
+  /* The lift is opt-in: only surfaces that are themselves interactive move. */
+  .workspace-panel-lift {
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      border-color var(--duration-base) var(--ease-in-out),
+      box-shadow var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-panel-lift:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--ghost) 40%, var(--line));
+    box-shadow: var(--elev-3);
+  }
+
+  /* ---------- controls ---------- */
+  .workspace-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-tile);
+    color: var(--ghost);
+    transition:
+      color var(--duration-base) var(--ease-in-out),
+      background-color var(--duration-base) var(--ease-in-out),
+      border-color var(--duration-base) var(--ease-in-out),
+      transform var(--duration-fast) var(--ease-out);
+  }
+  .workspace-icon-button:hover:not(:disabled) {
+    color: var(--ice);
+    background: color-mix(in srgb, var(--ghost) 9%, transparent);
+  }
+  .workspace-icon-button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .workspace-icon-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .workspace-primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 9px 16px;
+    border: 1px solid color-mix(in srgb, var(--accent-pulse) 65%, transparent);
+    border-radius: var(--radius-field);
+    background: var(--accent-pulse);
+    color: var(--void);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.26);
+    transition:
+      background-color var(--duration-base) var(--ease-in-out),
+      box-shadow var(--duration-base) var(--ease-in-out),
+      transform var(--duration-fast) var(--ease-out);
+  }
+  .workspace-primary-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-pulse) 88%, var(--ice));
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+      0 4px 14px -6px color-mix(in srgb, var(--accent-pulse) 55%, transparent);
+  }
+  .workspace-primary-button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .workspace-primary-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .workspace-text-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 28px;
+    color: var(--ghost);
+    font-size: 11px;
+    line-height: 1.5;
+    transition: color var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-text-link > svg,
+  .workspace-row-arrow {
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      color var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-text-link:hover,
+  .workspace-workflow-row:hover .workspace-row-arrow,
+  .workspace-shortcut:hover .workspace-row-arrow {
+    color: var(--accent-pulse);
+  }
+  .workspace-text-link:hover > svg,
+  .workspace-workflow-row:hover .workspace-row-arrow,
+  .workspace-shortcut:hover .workspace-row-arrow {
+    transform: translateX(2px);
+  }
+
+  /* Command trigger: reads as a search field, not a button. */
+  .workspace-command-trigger {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-field);
+    /* Sits a step below the chrome it lives on, plus the inset shadow, so it
+       reads as a well to type into rather than another button to press. */
+    background: color-mix(in srgb, var(--void) 82%, var(--raise));
+    box-shadow: var(--inset-well);
+    color: var(--ghost);
+    transition:
+      color var(--duration-base) var(--ease-in-out),
+      background-color var(--duration-base) var(--ease-in-out),
+      border-color var(--duration-base) var(--ease-in-out);
+  }
+  @media (min-width: 640px) {
+    .workspace-command-trigger {
+      width: 14rem;
+      justify-content: flex-start;
+      padding-inline: 11px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .workspace-command-trigger {
+      width: 18rem;
+    }
+  }
+  .workspace-command-trigger:hover {
+    color: var(--ice);
+    border-color: color-mix(in srgb, var(--accent-pulse) 38%, var(--line));
+    background: color-mix(in srgb, var(--accent-pulse) 7%, var(--raise));
+  }
+  .workspace-command-trigger-label {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  /* A literal key is the terminal/console tell the reference systems use for
+     "this is a shortcut", not a decorative chip. */
+  .workspace-keycap {
+    display: inline-flex;
+    height: 20px;
+    min-width: 20px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-bottom-color: color-mix(in srgb, var(--ghost) 42%, var(--line));
+    border-radius: 5px;
+    background-color: var(--ink);
+    background-image: var(--sheen);
+    padding-inline: 5px;
+    color: var(--ghost);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .workspace-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-badge);
+    background-color: var(--raise);
+    background-image: var(--sheen);
+    padding-inline: 8px;
+    color: var(--ghost);
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* ---------- overview: stat band ---------- */
+  .overview-metric {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    padding: 18px 16px;
+    animation: workspaceEnter var(--duration-slow) var(--ease-out) both;
+  }
+  .overview-metric:nth-child(2) {
+    animation-delay: 45ms;
+  }
+  .overview-metric:nth-child(3) {
+    animation-delay: 90ms;
+  }
+  .overview-metric:nth-child(4) {
+    animation-delay: 135ms;
+  }
+  @media (min-width: 640px) {
+    .overview-metric {
+      padding: 22px 24px;
+    }
+  }
+  .workspace-stat-label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--ghost);
+  }
+  .workspace-stat-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-tile);
+    background-color: var(--raise);
+    background-image: var(--sheen);
+    box-shadow: var(--elev-1);
+  }
+  .workspace-stat-value {
+    margin-top: 14px;
+    overflow-wrap: anywhere;
+    color: var(--ice);
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: var(--tracking-display);
+    font-variant-numeric: tabular-nums;
+  }
+  @media (min-width: 640px) {
+    .workspace-stat-value {
+      font-size: 26px;
+    }
+  }
+  .workspace-stat-detail {
+    margin-top: 10px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--ghost);
+  }
+
+  /* ---------- overview: panels and rows ---------- */
+  .overview-metric:not(:last-child) {
+    border-bottom: 1px solid var(--line);
+  }
+  .overview-metric:nth-child(odd) {
+    border-right: 1px solid var(--line);
+  }
+  .overview-metric:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+  @media (min-width: 1280px) {
+    .overview-metric:not(:last-child) {
+      border-right: 1px solid var(--line);
+      border-bottom: 0;
+    }
+  }
+  .workspace-workflow-row,
+  .workspace-shortcut {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    margin-inline: -8px;
+    border-radius: var(--radius-tile);
+    padding: 14px 8px;
+    transition: background-color var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-shortcut {
+    padding-block: 12px;
+  }
+  .workspace-workflow-row:hover,
+  .workspace-shortcut:hover {
+    background: color-mix(in srgb, var(--ghost) 6%, transparent);
+  }
+  .workspace-row-glyph {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-tile);
+    background-color: var(--raise);
+    background-image: var(--sheen);
+    box-shadow: var(--elev-1);
+    color: var(--accent-pulse);
+    transition:
+      border-color var(--duration-base) var(--ease-in-out),
+      color var(--duration-base) var(--ease-in-out);
+  }
+  .workspace-workflow-row:hover .workspace-row-glyph,
+  .workspace-shortcut:hover .workspace-row-glyph {
+    border-color: color-mix(in srgb, var(--accent-pulse) 35%, var(--line));
+  }
+  .workspace-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding-block: 24px;
+    text-align: center;
+  }
+
+  /* ---------- overview: cost chart ---------- */
+  .overview-chart {
+    position: relative;
+  }
+  .overview-chart-grid {
+    position: absolute;
+    inset: 8px 0 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .overview-chart-grid > span {
+    border-bottom: 1px dashed var(--line);
+  }
+  .overview-chart-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    padding: 8px 2px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-badge);
+    color: var(--ghost);
+    touch-action: pan-y;
+    transition:
+      background-color var(--duration-base) var(--ease-in-out),
+      color var(--duration-base) var(--ease-in-out);
+  }
+  .overview-chart-day[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--accent-pulse) 6%, transparent);
+    color: var(--ice);
+  }
+  .overview-chart-day:focus-visible {
+    outline-offset: -2px;
+  }
+  .overview-chart-track {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: 100%;
+    height: 128px;
+  }
+  .overview-chart-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 36px;
+    min-height: 2px;
+    border: 1px solid color-mix(in srgb, var(--accent-pulse) 70%, transparent);
+    border-radius: 4px 4px 1px 1px;
+    background: color-mix(in srgb, var(--accent-pulse) 35%, var(--ink));
+    transition:
+      background-color var(--duration-base) var(--ease-in-out),
+      border-color var(--duration-base) var(--ease-in-out);
+  }
+  /* On dark, a bar that is brighter at the top and fades down reads as a lit
+     column with volume; a flat fill reads as a rectangle. Light keeps the flat
+     fill, where a vertical fade would only look like a printing defect.
+     The :not() is load-bearing, not decoration: this selector is more specific
+     than the `[data-known='false']` rule below, so without it an unpriced day
+     would silently lose its hatch — the only cue that its height is not a real
+     measurement — and render as an ordinary priced bar. */
+  :root:not([data-theme='light']) .overview-chart-bar:not([data-known='false']) {
+    border-color: color-mix(in srgb, var(--accent-pulse) 60%, transparent);
+    background-color: color-mix(in srgb, var(--accent-pulse) 18%, var(--ink));
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent-pulse) 62%, transparent),
+      color-mix(in srgb, var(--accent-pulse) 4%, transparent)
+    );
+  }
+  .overview-chart-day[aria-pressed='true'] .overview-chart-bar[data-known='true'] {
+    background: color-mix(in srgb, var(--accent-pulse) 80%, var(--ink));
+    border-color: var(--accent-pulse);
+  }
+  :root:not([data-theme='light'])
+    .overview-chart-day[aria-pressed='true']
+    .overview-chart-bar[data-known='true'] {
+    background-color: color-mix(in srgb, var(--accent-pulse) 46%, var(--ink));
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent-pulse) 92%, transparent),
+      color-mix(in srgb, var(--accent-pulse) 16%, transparent)
+    );
+  }
+  .overview-chart-bar[data-known='false'],
+  .overview-unknown-key {
+    border: 1px solid color-mix(in srgb, var(--accent-warn) 55%, transparent);
+    background: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent-warn) 15%, var(--ink)) 0 3px,
+      color-mix(in srgb, var(--accent-warn) 3%, var(--ink)) 3px 6px
+    );
+  }
+
+  /* ---------- entrance ---------- */
+  .workspace-reveal,
+  .overview-panel {
+    animation: workspaceEnter var(--duration-slow) var(--ease-out) both;
+  }
+  .overview-metrics {
+    animation-delay: 35ms;
+  }
+  .overview-panel {
+    animation-delay: 70ms;
+  }
+  .overview-skeleton {
+    border-radius: var(--radius-badge);
+    background: var(--raise);
+    animation: workspaceLoading 1500ms var(--ease-in-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace-reveal,
+    .overview-panel,
+    .overview-metric,
+    .overview-skeleton {
+      animation: none;
+    }
+    .workspace-text-link:hover > svg,
+    .workspace-workflow-row:hover .workspace-row-arrow,
+    .workspace-shortcut:hover .workspace-row-arrow {
+      transform: none;
+    }
+    .workspace-icon-button:active:not(:disabled),
+    .workspace-primary-button:active:not(:disabled),
+    .workspace-panel-lift:hover {
+      transform: none;
+    }
+  }
+}
+
+@keyframes workspaceEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes workspaceLoading {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}

@@ -73,11 +73,11 @@ flowchart TB
     Bus -.->|事件中继| Redis
     Graph --> DB
 
-    style FE fill:#0a0e18,stroke:#22d3ee,color:#e8ecf4
-    style BE fill:#0a0e18,stroke:#6e56cf,color:#e8ecf4
-    style LG fill:#0a0e18,stroke:#22c55e,color:#e8ecf4
-    style EXT fill:#0a0e18,stroke:#f59e0b,color:#e8ecf4
-    style ST fill:#0a0e18,stroke:#8b93a7,color:#e8ecf4
+    style FE fill:#0b0e1c,stroke:#22d3ee,color:#eaeefb
+    style BE fill:#0b0e1c,stroke:#6e56cf,color:#eaeefb
+    style LG fill:#0b0e1c,stroke:#22c55e,color:#eaeefb
+    style EXT fill:#0b0e1c,stroke:#f59e0b,color:#eaeefb
+    style ST fill:#0b0e1c,stroke:#909ab2,color:#eaeefb
 ```
 
 三个关键设计决策,理由比选择本身更重要:
@@ -214,11 +214,11 @@ flowchart LR
     RL --> R
     Once["一次性 migrate + bootstrap"] -.->|发布期写入| PG
 
-    style Nginx fill:#0a0e18,stroke:#22d3ee,color:#e8ecf4
-    style API1 fill:#0a0e18,stroke:#6e56cf,color:#e8ecf4
-    style W fill:#0a0e18,stroke:#22c55e,color:#e8ecf4
-    style PG fill:#0a0e18,stroke:#8b93a7,color:#e8ecf4
-    style R fill:#0a0e18,stroke:#8b93a7,color:#e8ecf4
+    style Nginx fill:#0b0e1c,stroke:#22d3ee,color:#eaeefb
+    style API1 fill:#0b0e1c,stroke:#6e56cf,color:#eaeefb
+    style W fill:#0b0e1c,stroke:#22c55e,color:#eaeefb
+    style PG fill:#0b0e1c,stroke:#909ab2,color:#eaeefb
+    style R fill:#0b0e1c,stroke:#909ab2,color:#eaeefb
 ```
 
 ```bash
@@ -318,6 +318,7 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 
 | 文档 | 内容 |
 |---|---|
+| [DESIGN.md](DESIGN.md) | 视觉与交互的单一事实源(awesome-design-md / Stitch 格式) |
 | [plan.md](docs/plan.md) | 总体设计与阶段规划(架构单一事实源) |
 | [progress.md](docs/progress.md) | 逐阶段实现细节与门禁证据 |
 | [c9-desktop-tauri-plan.md](docs/c9-desktop-tauri-plan.md) | C9 桌面化实施计划 |
@@ -329,7 +330,7 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 | [version-support-policy.md](docs/version-support-policy.md) | 版本兼容与支持窗口 |
 | [contracts/](contracts/) | OpenAPI · Workflow DSL · 执行事件 schema |
 
-设计系统的单一事实源是 [design-system/MASTER.md](design-system/MASTER.md) —— 改 UI 前先读它。
+设计系统的单一事实源是仓库根目录的 [DESIGN.md](DESIGN.md)(awesome-design-md / Stitch 格式,可直接交给编码智能体);[design-system/preview.html](design-system/preview.html) 是它的可视化对照页(色板 / 字阶 / 控件 / 导航 / 面板 / 投影阶梯,含深色与浅色切换),[design-system/MASTER.md](design-system/MASTER.md) 是生成摘要。改 UI 前先读 DESIGN.md。
 
 ## 技术栈
 

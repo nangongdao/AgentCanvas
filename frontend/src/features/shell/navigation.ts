@@ -47,6 +47,12 @@ export interface PlatformDestination {
   preload?: () => Promise<unknown>;
 }
 
+/** One route identity for both the rail and header, including saved canvases. */
+export function isDestinationActive(destination: PlatformDestination, pathname: string): boolean {
+  const base = destination.key === "workflows" ? "/workflows" : destination.to;
+  return pathname === base || (!destination.end && pathname.startsWith(`${base}/`));
+}
+
 export function destinationLabel(
   destination: PlatformDestination,
   t: Translate,

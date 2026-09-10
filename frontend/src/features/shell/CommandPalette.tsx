@@ -346,21 +346,31 @@ export function CommandPalette({ onOpen }: { onOpen?: () => void }) {
   };
 
   let previousSection: PaletteSection | null = null;
+  // The palette answers Ctrl+K on every platform and Cmd+K on macOS; showing
+  // the chord the user actually has is the difference between a decoration and
+  // a hint.
+  const shortcutLabel =
+    typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
+      ? "⌘K"
+      : "Ctrl K";
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
         onClick={openPalette}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-void/55 text-ghost transition hover:border-pulse/35 hover:bg-pulse/5 hover:text-ice sm:w-56 sm:justify-start sm:gap-2.5 sm:px-3 lg:w-72"
+        className="workspace-command-trigger"
         aria-label={t("palette.triggerLabel")}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-keyshortcuts="Control+K Meta+K"
         title={t("palette.triggerLabel")}
       >
-        <Search size={14} className="shrink-0" />
-        <span className="hidden truncate text-xs sm:block">{t("palette.triggerLabel")}</span>
+        <Search size={14} className="shrink-0" aria-hidden="true" />
+        <span className="workspace-command-trigger-label hidden sm:block">{t("palette.triggerLabel")}</span>
+        <kbd className="workspace-keycap hidden sm:inline-flex" aria-hidden="true">
+          {shortcutLabel}
+        </kbd>
       </button>
 
       {open && (
