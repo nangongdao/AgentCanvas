@@ -64,4 +64,40 @@ class ModelConfigUpdate(BaseModel):
     is_default: bool | None = None
 
 
-__all__ = ["ModelConfigCreate", "ModelConfigOut", "ModelConfigUpdate"]
+class ModelDiscoveryRequest(BaseModel):
+    """Probe an endpoint's own model list before saving a model config.
+
+    The endpoint can be described inline (``base_url`` / ``api_key``) so the dialog
+    can test an unsaved draft, or referenced by ``model_config_id`` to reuse a saved
+    config's stored base URL and decrypted key.
+    """
+
+    provider: str = Field(min_length=1, max_length=64)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = Field(default=None, max_length=4096)
+    model_config_id: str | None = Field(default=None, min_length=1, max_length=64)
+    allow_private_network: bool = False
+
+
+class DiscoveredModelOut(BaseModel):
+    id: str
+    # Naming heuristic applied to the id, presented as an editable default.
+    kind: Literal["chat", "embedding"] = "chat"
+    owned_by: str | None = None
+
+
+class ModelDiscoveryOut(BaseModel):
+    provider: str
+    base_url: str
+    models: list[DiscoveredModelOut] = Field(default_factory=list)
+    latency_ms: int = 0
+
+
+__all__ = [
+    "DiscoveredModelOut",
+    "ModelConfigCreate",
+    "ModelConfigOut",
+    "ModelConfigUpdate",
+    "ModelDiscoveryOut",
+    "ModelDiscoveryRequest",
+]

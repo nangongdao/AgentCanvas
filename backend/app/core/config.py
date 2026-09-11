@@ -80,6 +80,9 @@ class Settings:
     rate_limit_ingest_requests: int = 10
     rate_limit_retrieval_requests: int = 30
     rate_limit_mcp_requests: int = 30
+    # Provider endpoint discovery performs an operator-triggered outbound request,
+    # so it gets its own bucket rather than sharing an unrelated budget.
+    rate_limit_discovery_requests: int = 30
     rate_limit_max_buckets: int = 10_000
     # C8-2: public app runtime is an unauthenticated surface; keep per-client
     # send volume bounded independently of platform chat.
@@ -111,6 +114,8 @@ class Settings:
     login_timeout_seconds: float = 10.0
     mcp_max_concurrent: int = 4
     mcp_timeout_seconds: float = 30.0
+    discovery_max_concurrent: int = 4
+    discovery_timeout_seconds: float = 15.0
 
     # D4 Phase 2 outbound resilience. Redis-backed horizontal roles share these
     # policies; SQLite and unit-test deployments keep process-local state.
@@ -416,6 +421,7 @@ def validate_runtime_settings(settings: Settings) -> None:
         "RATE_LIMIT_INGEST_REQUESTS": settings.rate_limit_ingest_requests,
         "RATE_LIMIT_RETRIEVAL_REQUESTS": settings.rate_limit_retrieval_requests,
         "RATE_LIMIT_MCP_REQUESTS": settings.rate_limit_mcp_requests,
+        "RATE_LIMIT_DISCOVERY_REQUESTS": settings.rate_limit_discovery_requests,
         "RATE_LIMIT_MAX_BUCKETS": settings.rate_limit_max_buckets,
     }
     for name, value in rate_limits.items():
@@ -444,6 +450,8 @@ def validate_runtime_settings(settings: Settings) -> None:
         "LOGIN_TIMEOUT_SECONDS": settings.login_timeout_seconds,
         "MCP_MAX_CONCURRENT": settings.mcp_max_concurrent,
         "MCP_TIMEOUT_SECONDS": settings.mcp_timeout_seconds,
+        "DISCOVERY_MAX_CONCURRENT": settings.discovery_max_concurrent,
+        "DISCOVERY_TIMEOUT_SECONDS": settings.discovery_timeout_seconds,
     }
     for name, limit_value in operation_limits.items():
         if limit_value <= 0:
@@ -630,6 +638,7 @@ def load_settings() -> Settings:
         rate_limit_ingest_requests=int(_env("RATE_LIMIT_INGEST_REQUESTS", "10")),
         rate_limit_retrieval_requests=int(_env("RATE_LIMIT_RETRIEVAL_REQUESTS", "30")),
         rate_limit_mcp_requests=int(_env("RATE_LIMIT_MCP_REQUESTS", "30")),
+        rate_limit_discovery_requests=int(_env("RATE_LIMIT_DISCOVERY_REQUESTS", "30")),
         rate_limit_max_buckets=int(_env("RATE_LIMIT_MAX_BUCKETS", "10000")),
         request_body_max_bytes=int(_env("REQUEST_BODY_MAX_BYTES", str(1 * 1024 * 1024))),
         upload_request_max_bytes=int(_env("UPLOAD_REQUEST_MAX_BYTES", str(21 * 1024 * 1024))),
@@ -656,6 +665,8 @@ def load_settings() -> Settings:
         login_timeout_seconds=float(_env("LOGIN_TIMEOUT_SECONDS", "10")),
         mcp_max_concurrent=int(_env("MCP_MAX_CONCURRENT", "4")),
         mcp_timeout_seconds=float(_env("MCP_TIMEOUT_SECONDS", "30")),
+        discovery_max_concurrent=int(_env("DISCOVERY_MAX_CONCURRENT", "4")),
+        discovery_timeout_seconds=float(_env("DISCOVERY_TIMEOUT_SECONDS", "15")),
         model_resilience_max_attempts=int(_env("MODEL_RESILIENCE_MAX_ATTEMPTS", "2")),
         model_resilience_failure_threshold=int(_env("MODEL_RESILIENCE_FAILURE_THRESHOLD", "3")),
         model_resilience_reset_seconds=float(_env("MODEL_RESILIENCE_RESET_SECONDS", "30")),

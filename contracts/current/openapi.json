@@ -2657,6 +2657,39 @@
         "title": "DebugRunOptions",
         "type": "object"
       },
+      "DiscoveredModelOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "embedding"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "owned_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owned By"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "DiscoveredModelOut",
+        "type": "object"
+      },
       "DocumentIngestOut": {
         "properties": {
           "cache_hits": {
@@ -6402,6 +6435,94 @@
           }
         },
         "title": "ModelConfigUpdate",
+        "type": "object"
+      },
+      "ModelDiscoveryOut": {
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "latency_ms": {
+            "default": 0,
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredModelOut"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "base_url"
+        ],
+        "title": "ModelDiscoveryOut",
+        "type": "object"
+      },
+      "ModelDiscoveryRequest": {
+        "description": "Probe an endpoint's own model list before saving a model config.\n\nThe endpoint can be described inline (``base_url`` / ``api_key``) so the dialog\ncan test an unsaved draft, or referenced by ``model_config_id`` to reuse a saved\nconfig's stored base URL and decrypted key.",
+        "properties": {
+          "allow_private_network": {
+            "default": false,
+            "title": "Allow Private Network",
+            "type": "boolean"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "model_config_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Config Id"
+          },
+          "provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "title": "ModelDiscoveryRequest",
         "type": "object"
       },
       "NodeAttemptOut": {
@@ -18109,6 +18230,48 @@
           }
         },
         "summary": "Create Model",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/models/discover": {
+      "post": {
+        "description": "List the models an endpoint serves, so the dialog can offer a picker.\n\nThe API key never leaves the request: an inline ``api_key`` is used for this\nprobe and never persisted, and ``model_config_id`` reuses a saved config's\ndecrypted key server-side. The probe is audited (without the key) because it\nis an operator-triggered outbound request.",
+        "operationId": "discover_models_api_models_discover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDiscoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDiscoveryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discover Models",
         "tags": [
           "meta"
         ]

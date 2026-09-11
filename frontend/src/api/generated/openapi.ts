@@ -1666,6 +1666,31 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/models/discover": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Discover Models
+         * @description List the models an endpoint serves, so the dialog can offer a picker.
+         *
+         *     The API key never leaves the request: an inline ``api_key`` is used for this
+         *     probe and never persisted, and ``model_config_id`` reuses a saved config's
+         *     decrypted key server-side. The probe is audited (without the key) because it
+         *     is an operator-triggered outbound request.
+         */
+        readonly post: operations["discover_models_api_models_discover_post"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/models/provider-capabilities": {
         readonly parameters: {
             readonly query?: never;
@@ -3918,6 +3943,19 @@ export interface components {
              */
             readonly single_step: boolean;
         };
+        /** DiscoveredModelOut */
+        readonly DiscoveredModelOut: {
+            /** Id */
+            readonly id: string;
+            /**
+             * Kind
+             * @default chat
+             * @enum {string}
+             */
+            readonly kind: "chat" | "embedding";
+            /** Owned By */
+            readonly owned_by?: string | null;
+        };
         /** DocumentIngestOut */
         readonly DocumentIngestOut: {
             /**
@@ -5262,6 +5300,43 @@ export interface components {
             readonly prompt_price_per_million_usd?: number | string | null;
             /** Provider */
             readonly provider?: string | null;
+        };
+        /** ModelDiscoveryOut */
+        readonly ModelDiscoveryOut: {
+            /** Base Url */
+            readonly base_url: string;
+            /**
+             * Latency Ms
+             * @default 0
+             */
+            readonly latency_ms: number;
+            /** Models */
+            readonly models?: readonly components["schemas"]["DiscoveredModelOut"][];
+            /** Provider */
+            readonly provider: string;
+        };
+        /**
+         * ModelDiscoveryRequest
+         * @description Probe an endpoint's own model list before saving a model config.
+         *
+         *     The endpoint can be described inline (``base_url`` / ``api_key``) so the dialog
+         *     can test an unsaved draft, or referenced by ``model_config_id`` to reuse a saved
+         *     config's stored base URL and decrypted key.
+         */
+        readonly ModelDiscoveryRequest: {
+            /**
+             * Allow Private Network
+             * @default false
+             */
+            readonly allow_private_network: boolean;
+            /** Api Key */
+            readonly api_key?: string | null;
+            /** Base Url */
+            readonly base_url?: string | null;
+            /** Model Config Id */
+            readonly model_config_id?: string | null;
+            /** Provider */
+            readonly provider: string;
         };
         /** NodeAttemptOut */
         readonly NodeAttemptOut: {
@@ -10987,6 +11062,39 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly discover_models_api_models_discover_post: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ModelDiscoveryRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ModelDiscoveryOut"];
+                };
             };
             /** @description Validation Error */
             readonly 422: {

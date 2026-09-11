@@ -182,6 +182,17 @@ def operation_policies(settings: Settings) -> tuple[OperationPolicy, ...]:
             ),
             RateLimitConfig(settings.rate_limit_mcp_requests, window),
         ),
+        OperationPolicy(
+            "model_discovery",
+            r"^/api/models/discover$",
+            frozenset({"POST"}),
+            RequestPolicyConfig(
+                max_body_bytes=body,
+                max_concurrent=settings.discovery_max_concurrent,
+                timeout_seconds=settings.discovery_timeout_seconds,
+            ),
+            RateLimitConfig(settings.rate_limit_discovery_requests, window),
+        ),
     )
 
 

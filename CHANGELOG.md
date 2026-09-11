@@ -190,6 +190,22 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   provider list served by `GET /api/models` and
   `/api/models/provider-capabilities` is derived from the registry, so no
   contract change accompanied it.
+- Provider endpoint discovery: `POST /api/models/discover` lists the models an
+  endpoint actually serves, so adding a model config no longer means recalling a
+  vendor model id from memory. It speaks each adapter's own listing API — OpenAI
+  `/models`, Anthropic `/v1/models`, Gemini `/v1beta/models`, Ollama `/api/tags` —
+  and returns the ids with a chat/embedding hint inferred from the name, or from
+  Gemini's declared generation methods. The model dialog gained a "test
+  connection" action that probes the in-progress form and offers the result as a
+  picker instead of a free-text field; when editing, the stored key is reused
+  server-side so a secret never has to be retyped. Outbound calls reuse the
+  SSRF-safe transport, so the destination is pinned to pre-resolved public IPs
+  and a private target needs an explicit opt-in — which is what makes a locally
+  hosted Ollama reachable. An inline API key is used for the probe only and is
+  never persisted, and a vendor error that echoes the credential back is redacted
+  before it reaches the operator. The endpoint is admin-gated, carries its own
+  rate-limit budget, and records an audit event. The demo (mock) provider answers
+  from a canned catalog, so discovery is demonstrable without an API key.
 
 ### Changed
 

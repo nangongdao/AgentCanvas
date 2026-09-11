@@ -1,10 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, Loader2, PlugZap, X } from "lucide-react";
 
+import { ApiError } from "@/api/client";
+import { discoverModels } from "@/api/endpoints/meta";
 import type {
   ModelConfigCreate,
   ModelConfigDTO,
   ModelConfigUpdate,
+  ModelDiscoveryDTO,
   ProviderCapabilityOverrides,
   ProviderDescriptorDTO,
 } from "@/api/endpoints/meta";
@@ -56,6 +59,45 @@ export function ModelDialog({
   );
   const dialogRef = useDialogFocus<HTMLDivElement>({ open: true, onClose });
   const providerDefaults = providerDescriptors.find((item) => item.id === provider)?.capabilities;
+  const [discovery, setDiscovery] = useState<ModelDiscoveryDTO | null>(null);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [allowPrivate, setAllowPrivate] = useState(false);
+
+  /** Probe the endpoint so the operator picks a real model id instead of typing one.
+   *
+   * Editing an unchanged provider lets the backend reuse the stored key, so the
+   * operator does not have to retype a secret just to test the connection.
+   */
+  const probeEndpoint = async () => {
+    setDiscovering(true);
+    setDiscoveryError(null);
+    try {
+      const result = await discoverModels({
+        provider,
+        base_url: baseUrl.trim() || null,
+        api_key: apiKey.trim() || null,
+        model_config_id: model && model.provider === provider ? model.id : null,
+        allow_private_network: allowPrivate,
+      });
+      setDiscovery(result);
+    } catch (cause) {
+      setDiscovery(null);
+      setDiscoveryError(cause instanceof ApiError ? cause.message : String(cause));
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  /** Selecting a discovered model fills the field and adopts the inferred type. */
+  const pickDiscoveredModel = (modelId: string) => {
+    if (!modelId || !discovery) return;
+    setModelName(modelId);
+    const found = discovery.models.find((item) => item.id === modelId);
+    if (!found) return;
+    setKind(found.kind);
+    if (found.kind === "embedding") setCapabilityOverrides({});
+  };
 
   const submit = () => {
     if (!name.trim() || !provider || !modelName.trim()) return;
@@ -170,6 +212,70 @@ export function ModelDialog({
               支持 env://变量名、docker://文件名、external://路径；引用只加密保存，运行时解析。
             </p>
           </Field>
+          <div className="rounded-lg border border-line/70 bg-raise/40 p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={probeEndpoint}
+                disabled={discovering}
+                className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[11px] text-ghost transition hover:bg-line hover:text-ice disabled:opacity-50"
+              >
+                {discovering ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <PlugZap size={13} />
+                )}
+                {discovering ? "测试中…" : "测试连接并获取模型"}
+              </button>
+              <label className="flex items-center gap-1.5 text-[10px] text-ghost/70">
+                <input
+                  type="checkbox"
+                  checked={allowPrivate}
+                  onChange={(event) => setAllowPrivate(event.target.checked)}
+                  className="accent-volt"
+                />
+                允许私有网络（本机 / Ollama）
+              </label>
+            </div>
+            <p className="mt-1.5 font-mono text-[9px] leading-relaxed text-ghost/50">
+              出站请求默认只允许公网目标；本机或内网端点需要勾选上面的选项。
+            </p>
+            {discoveryError && (
+              <p
+                data-testid="model-discovery-error"
+                className="mt-2 rounded-md border border-bad/40 bg-bad/10 px-2 py-1.5 text-[10px] leading-relaxed text-bad"
+              >
+                {discoveryError}
+              </p>
+            )}
+            {discovery && (
+              <div className="mt-2 space-y-2">
+                <p
+                  data-testid="model-discovery-status"
+                  className="font-mono text-[9px] uppercase tracking-wider text-ghost/60"
+                >
+                  连接正常 · {discovery.models.length} 个模型 · {discovery.latency_ms} ms
+                </p>
+                {discovery.models.length > 0 ? (
+                  <select
+                    value=""
+                    onChange={(event) => pickDiscoveredModel(event.target.value)}
+                    className="field-input"
+                    aria-label="从发现的模型中选择"
+                  >
+                    <option value="">选择一个模型…</option>
+                    {discovery.models.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.id} · {item.kind}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-[10px] text-ghost/60">该端点没有返回任何模型。</p>
+                )}
+              </div>
+            )}
+          </div>
           {kind === "chat" && (
             <div className="space-y-3 border-t border-line pt-3">
               <div className="grid grid-cols-2 gap-3">

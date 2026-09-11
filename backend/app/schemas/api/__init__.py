@@ -30,9 +30,12 @@ from app.schemas.auth import AuthSessionOut as AuthSessionOut
 from app.schemas.auth import UserOut as UserOut
 from app.schemas.cost_governance import CostAlertOut as CostAlertOut
 from app.schemas.cost_governance import CostGovernanceOut as CostGovernanceOut
+from app.schemas.models import DiscoveredModelOut as DiscoveredModelOut
 from app.schemas.models import ModelConfigCreate as ModelConfigCreate
 from app.schemas.models import ModelConfigOut as ModelConfigOut
 from app.schemas.models import ModelConfigUpdate as ModelConfigUpdate
+from app.schemas.models import ModelDiscoveryOut as ModelDiscoveryOut
+from app.schemas.models import ModelDiscoveryRequest as ModelDiscoveryRequest
 from app.schemas.service_accounts import ApiTokenIssue as ApiTokenIssue
 from app.schemas.service_accounts import ApiTokenIssueOut as ApiTokenIssueOut
 from app.schemas.service_accounts import ApiTokenOut as ApiTokenOut

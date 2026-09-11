@@ -156,3 +156,33 @@ export function updateModel(id: string, body: ModelConfigUpdate) {
 export function deleteModel(id: string) {
   return apiSend<void>(`/api/models/${id}`, "DELETE");
 }
+
+export interface ModelDiscoveryRequest {
+  provider: string;
+  base_url?: string | null;
+  api_key?: string | null;
+  /** Reuse a saved config's stored base URL and decrypted key. */
+  model_config_id?: string | null;
+  allow_private_network?: boolean;
+}
+
+export interface DiscoveredModelDTO {
+  id: string;
+  /** Naming heuristic from the backend, offered as an editable default. */
+  kind: "chat" | "embedding";
+  owned_by?: string | null;
+}
+
+export interface ModelDiscoveryDTO {
+  provider: string;
+  base_url: string;
+  /** Always serialized by the backend; typed as required for the same reason
+   * the copilot draft narrowed its lists. */
+  models: DiscoveredModelDTO[];
+  latency_ms: number;
+}
+
+/** Probe an endpoint's own model list so the dialog can offer a picker. */
+export function discoverModels(body: ModelDiscoveryRequest) {
+  return apiSend<ModelDiscoveryDTO>("/api/models/discover", "POST", body);
+}
