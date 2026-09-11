@@ -99,7 +99,7 @@ function SaveIndicator(props: Pick<Props, "dirty" | "saveState" | "workflowId">)
 
 export function CanvasCommandBar(props: Props) {
   return (
-    <header role="toolbar" aria-label="工作流命令栏" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 lg:h-14 lg:flex-nowrap lg:gap-3 lg:px-5 lg:py-0">
+    <header role="toolbar" aria-label="工作流命令栏" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 lg:gap-3 lg:px-5">
       <WorkflowNavigator
         activeId={props.workflowId}
         canEdit={props.canEdit}
@@ -208,75 +208,80 @@ export function CanvasCommandBar(props: Props) {
         roleCanEdit={props.collaboration.canEdit}
       />
 
-      <div className="ml-auto flex min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap">
-        {props.editingAllowed && (
-          <button
-            type="button"
-            disabled={props.busy}
-            onClick={props.onSave}
-            className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-ink/80 px-2.5 text-xs text-ice transition hover:border-ghost/50 hover:bg-line/60 active:scale-95 disabled:opacity-40"
-            title="保存工作流"
-          >
-            {props.saveState === "saving" ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Save size={13} />
-            )}
-            <span className="hidden sm:inline">保存</span>
-          </button>
-        )}
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap">
+          <WorkflowTemplateGallery
+            workflowId={props.workflowId}
+            workflowName={props.name}
+            canEdit={props.canEdit}
+            onOpenWorkflow={props.onOpenWorkflow}
+            onNotify={props.onNotify}
+          />
+          <WorkflowVersionPanel
+            workflowId={props.workflowId}
+            currentVersion={props.version}
+            canEdit={props.editingAllowed}
+            onEnsureSaved={props.onEnsureSaved}
+            onReload={props.onReloadWorkflow}
+            onOpenWorkflow={props.onOpenWorkflow}
+            onNotify={props.onNotify}
+          />
+          <WorkflowReviewPanel
+            workflowId={props.workflowId}
+            currentVersion={props.version}
+            canEdit={props.collaboration.canEdit}
+            onNotify={props.onNotify}
+          />
+          <WorkflowTriggerPanel
+            workflowId={props.workflowId}
+            canEdit={props.editingAllowed}
+            canAdmin={props.canAdmin}
+            currentVersion={props.version}
+            onNotify={props.onNotify}
+          />
+          <ExecutionHistory workflowId={props.workflowId} />
+          {props.canAdmin && <McpManagerPanel />}
+        </div>
 
-        <WorkflowTemplateGallery
-          workflowId={props.workflowId}
-          workflowName={props.name}
-          canEdit={props.canEdit}
-          onOpenWorkflow={props.onOpenWorkflow}
-          onNotify={props.onNotify}
-        />
-        <WorkflowVersionPanel
-          workflowId={props.workflowId}
-          currentVersion={props.version}
-          canEdit={props.editingAllowed}
-          onEnsureSaved={props.onEnsureSaved}
-          onReload={props.onReloadWorkflow}
-          onOpenWorkflow={props.onOpenWorkflow}
-          onNotify={props.onNotify}
-        />
-        <WorkflowReviewPanel
-          workflowId={props.workflowId}
-          currentVersion={props.version}
-          canEdit={props.collaboration.canEdit}
-          onNotify={props.onNotify}
-        />
-        <WorkflowTriggerPanel
-          workflowId={props.workflowId}
-          canEdit={props.editingAllowed}
-          canAdmin={props.canAdmin}
-          currentVersion={props.version}
-          onNotify={props.onNotify}
-        />
-        <ExecutionHistory workflowId={props.workflowId} />
-        {props.canAdmin && <McpManagerPanel />}
-        {props.editingAllowed && (
-          <button
-            type="button"
-            disabled={props.busy || props.running}
-            onClick={props.onRun}
-            className={cn(
-              "btn-primary flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition active:scale-95",
-              props.running
-                ? "cursor-not-allowed bg-pulse/20 text-pulse"
-                : "bg-pulse text-void shadow-glow-cyan hover:brightness-110",
-            )}
-          >
-            {props.running ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Play size={13} fill="currentColor" />
-            )}
-            <span>{props.running ? "运行中" : "运行"}</span>
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {props.editingAllowed && (
+            <button
+              type="button"
+              disabled={props.busy}
+              onClick={props.onSave}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-ink/80 px-2.5 text-xs text-ice transition hover:border-ghost/50 hover:bg-line/60 active:scale-95 disabled:opacity-40"
+              title="保存工作流"
+            >
+              {props.saveState === "saving" ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Save size={13} />
+              )}
+              <span className="hidden sm:inline">保存</span>
+            </button>
+          )}
+
+          {props.editingAllowed && (
+            <button
+              type="button"
+              disabled={props.busy || props.running}
+              onClick={props.onRun}
+              className={cn(
+                "btn-primary flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition active:scale-95",
+                props.running
+                  ? "cursor-not-allowed bg-pulse/20 text-pulse"
+                  : "bg-pulse text-void shadow-glow-cyan hover:brightness-110",
+              )}
+            >
+              {props.running ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Play size={13} fill="currentColor" />
+              )}
+              <span>{props.running ? "运行中" : "运行"}</span>
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

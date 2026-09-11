@@ -237,6 +237,21 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   `AgentCanvas Audit Log`, `AgentCanvas Quotas`) now match the navigation labels
   they sit under.
 
+### Fixed
+
+- The workflow command bar no longer hides its own actions at desktop widths.
+  It was pinned to a single 56px row (`lg:h-14 lg:flex-nowrap`) while carrying
+  far more controls than fit: navigation, name, undo/redo, layout, object and
+  clipboard commands, collaboration state, six panel triggers, save, and run.
+  Past roughly 1200px the trailing cluster — the one holding `保存` and `运行` —
+  was squeezed to zero width by a `flex-1` wrapper with `overflow-x-auto`, so
+  the primary action was clipped out of reach, not merely scrolled. The bar now
+  wraps instead of clipping and the primary cluster is `shrink-0` outside the
+  scrolling wrapper, so `保存` and `运行` stay clickable at any width while the
+  secondary cluster gives up space first. This is what made the canvas,
+  collaboration, and SSE end-to-end specs fail with "intercepts pointer events"
+  at the default 1280×720 viewport.
+
 ### Security
 
 - Production containers run as non-root with read-only filesystems, dropped
