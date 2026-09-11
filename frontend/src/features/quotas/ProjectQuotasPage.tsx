@@ -25,6 +25,7 @@ import {
   updateProjectQuotas,
 } from "@/api/endpoints/projectQuotas";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useI18nStore, useT, type Translate } from "@/features/i18n/i18n";
 import {
   QuotaMetricRow,
   type QuotaMetricView,
@@ -38,7 +39,16 @@ interface QuotaDraft {
   mcp: string | null;
 }
 
-const numberFormat = new Intl.NumberFormat("zh-CN");
+/** Locale-bound formatters; the units themselves (bytes, USD) stay neutral. */
+interface QuotaFormat {
+  number: Intl.NumberFormat;
+  tag: string;
+}
+
+function makeFormat(locale: "zh" | "en"): QuotaFormat {
+  const tag = locale === "zh" ? "zh-CN" : "en-US";
+  return { number: new Intl.NumberFormat(tag), tag };
+}
 
 function integerDraft(value: number | null): string | null {
   return value === null ? null : String(value);
@@ -54,30 +64,33 @@ function draftFrom(quota: ProjectQuotaDTO): QuotaDraft {
   };
 }
 
-function parseInteger(value: string | null, label: string): number | null {
+function parseInteger(value: string | null, label: string, t: Translate): number | null {
   if (value === null) return null;
-  if (!/^\d+$/.test(value)) throw new Error(`${label}必须是非负整数`);
+  if (!/^\d+$/.test(value)) throw new Error(t("quotas.error.integer", { label }));
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) throw new Error(`${label}超出安全范围`);
+  if (!Number.isSafeInteger(parsed)) throw new Error(t("quotas.error.overflow", { label }));
   return parsed;
 }
 
-function updateFrom(draft: QuotaDraft): ProjectQuotaUpdate {
+function updateFrom(draft: QuotaDraft, t: Translate): ProjectQuotaUpdate {
   if (
     draft.modelCost !== null &&
     !/^\d+(?:\.\d{1,12})?$/.test(draft.modelCost)
   ) {
-    throw new Error("模型费用必须是最多 12 位小数的非负金额");
+    throw new Error(
+      t("quotas.error.decimal", { label: t("quotas.metric.modelCost.label") }),
+    );
   }
   return {
-    concurrent_execution_limit: parseInteger(draft.concurrent, "并发执行上限"),
-    storage_bytes_limit: parseInteger(draft.storage, "文档存储上限"),
+    concurrent_execution_limit: parseInteger(draft.concurrent, t("quotas.field.concurrent"), t),
+    storage_bytes_limit: parseInteger(draft.storage, t("quotas.field.storage"), t),
     monthly_embedding_input_bytes_limit: parseInteger(
       draft.embedding,
-      "Embedding 输入上限",
+      t("quotas.field.embedding"),
+      t,
     ),
     monthly_model_cost_usd_limit: draft.modelCost,
-    stdio_mcp_process_limit: parseInteger(draft.mcp, "MCP 进程上限"),
+    stdio_mcp_process_limit: parseInteger(draft.mcp, t("quotas.field.mcp"), t),
   };
 }
 
@@ -104,80 +117,89 @@ function ratio(usage: number, limit: number | null): number | null {
   return (usage / limit) * 100;
 }
 
-function metricViews(quota: ProjectQuotaDTO, draft: QuotaDraft): QuotaMetricView[] {
+function metricViews(
+  quota: ProjectQuotaDTO,
+  draft: QuotaDraft,
+  t: Translate,
+  format: QuotaFormat,
+): QuotaMetricView[] {
   const modelUsage = Number(quota.model_cost_usd);
   const modelLimit = quota.monthly_model_cost_usd_limit;
+  const unlimited = t("quotas.unlimited");
   return [
     {
       key: "concurrent",
       icon: <Activity size={16} />,
-      label: "并发执行",
-      description: "当前运行中的项目工作流执行槽位。",
-      usage: numberFormat.format(quota.concurrent_executions),
-      limit: quota.concurrent_execution_limit === null ? "无限" : numberFormat.format(quota.concurrent_execution_limit),
-      remaining: quota.concurrent_executions_remaining === null ? "无限" : numberFormat.format(quota.concurrent_executions_remaining),
+      label: t("quotas.metric.concurrent.label"),
+      description: t("quotas.metric.concurrent.description"),
+      usage: format.number.format(quota.concurrent_executions),
+      limit: quota.concurrent_execution_limit === null ? unlimited : format.number.format(quota.concurrent_execution_limit),
+      remaining: quota.concurrent_executions_remaining === null ? unlimited : format.number.format(quota.concurrent_executions_remaining),
       ratio: ratio(quota.concurrent_executions, quota.concurrent_execution_limit),
       tone: "pulse",
       draft: draft.concurrent,
-      inputLabel: "并发执行上限",
+      inputLabel: t("quotas.metric.concurrent.input"),
     },
     {
       key: "storage",
       icon: <HardDrive size={16} />,
-      label: "文档存储",
-      description: "项目知识库中文档原文件的持久化字节数。",
+      label: t("quotas.metric.storage.label"),
+      description: t("quotas.metric.storage.description"),
       usage: formatBytes(quota.storage_bytes),
-      limit: quota.storage_bytes_limit === null ? "无限" : formatBytes(quota.storage_bytes_limit),
-      remaining: quota.storage_bytes_remaining === null ? "无限" : formatBytes(quota.storage_bytes_remaining),
+      limit: quota.storage_bytes_limit === null ? unlimited : formatBytes(quota.storage_bytes_limit),
+      remaining: quota.storage_bytes_remaining === null ? unlimited : formatBytes(quota.storage_bytes_remaining),
       ratio: ratio(quota.storage_bytes, quota.storage_bytes_limit),
       tone: "ok",
       draft: draft.storage,
-      inputLabel: "文档存储字节上限",
+      inputLabel: t("quotas.metric.storage.input"),
     },
     {
       key: "embedding",
       icon: <BrainCircuit size={16} />,
-      label: "Embedding 输入",
-      description: "UTC 月内发送给嵌入服务的未缓存 UTF-8 输入。",
+      label: t("quotas.metric.embedding.label"),
+      description: t("quotas.metric.embedding.description"),
       usage: formatBytes(quota.embedding_input_bytes),
-      limit: quota.monthly_embedding_input_bytes_limit === null ? "无限" : formatBytes(quota.monthly_embedding_input_bytes_limit),
-      remaining: quota.embedding_input_bytes_remaining === null ? "无限" : formatBytes(quota.embedding_input_bytes_remaining),
+      limit: quota.monthly_embedding_input_bytes_limit === null ? unlimited : formatBytes(quota.monthly_embedding_input_bytes_limit),
+      remaining: quota.embedding_input_bytes_remaining === null ? unlimited : formatBytes(quota.embedding_input_bytes_remaining),
       ratio: ratio(quota.embedding_input_bytes, quota.monthly_embedding_input_bytes_limit),
       tone: "volt",
       draft: draft.embedding,
-      inputLabel: "每月 Embedding 输入字节上限",
+      inputLabel: t("quotas.metric.embedding.input"),
     },
     {
       key: "modelCost",
       icon: <CircleDollarSign size={16} />,
-      label: "模型费用",
-      description: "UTC 月内按模型定价与实际 Token 用量累计的费用。",
+      label: t("quotas.metric.modelCost.label"),
+      description: t("quotas.metric.modelCost.description"),
       usage: formatUsd(quota.model_cost_usd),
-      limit: modelLimit === null ? "无限" : formatUsd(modelLimit),
-      remaining: quota.model_cost_usd_remaining === null ? "无限" : formatUsd(quota.model_cost_usd_remaining),
+      limit: modelLimit === null ? unlimited : formatUsd(modelLimit),
+      remaining: quota.model_cost_usd_remaining === null ? unlimited : formatUsd(quota.model_cost_usd_remaining),
       ratio: ratio(modelUsage, modelLimit === null ? null : Number(modelLimit)),
       tone: "warn",
       draft: draft.modelCost,
-      inputLabel: "每月模型费用美元上限",
+      inputLabel: t("quotas.metric.modelCost.input"),
       inputStep: "0.000000000001",
     },
     {
       key: "mcp",
       icon: <Cable size={16} />,
-      label: "MCP 进程",
-      description: "项目专属 stdio MCP 子进程的实时占用。",
-      usage: numberFormat.format(quota.stdio_mcp_processes),
-      limit: quota.stdio_mcp_process_limit === null ? "无限" : numberFormat.format(quota.stdio_mcp_process_limit),
-      remaining: quota.stdio_mcp_processes_remaining === null ? "无限" : numberFormat.format(quota.stdio_mcp_processes_remaining),
+      label: t("quotas.metric.mcp.label"),
+      description: t("quotas.metric.mcp.description"),
+      usage: format.number.format(quota.stdio_mcp_processes),
+      limit: quota.stdio_mcp_process_limit === null ? unlimited : format.number.format(quota.stdio_mcp_process_limit),
+      remaining: quota.stdio_mcp_processes_remaining === null ? unlimited : format.number.format(quota.stdio_mcp_processes_remaining),
       ratio: ratio(quota.stdio_mcp_processes, quota.stdio_mcp_process_limit),
       tone: "bad",
       draft: draft.mcp,
-      inputLabel: "MCP 进程上限",
+      inputLabel: t("quotas.metric.mcp.input"),
     },
   ];
 }
 
 export function ProjectQuotasPage() {
+  const t = useT();
+  const locale = useI18nStore((state) => state.locale);
+  const format = useMemo(() => makeFormat(locale), [locale]);
   const { ready } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
@@ -207,7 +229,7 @@ export function ProjectQuotasPage() {
         }
       })
       .catch((cause: unknown) => {
-        if (active) setError(cause instanceof Error ? cause.message : "加载项目失败");
+        if (active) setError(cause instanceof Error ? cause.message : t("quotas.loadProjectsFailed"));
       })
       .finally(() => {
         if (active) setLoadingProjects(false);
@@ -215,7 +237,7 @@ export function ProjectQuotasPage() {
     return () => {
       active = false;
     };
-  }, [ready, searchParams, setSearchParams]);
+  }, [ready, searchParams, setSearchParams, t]);
 
   const loadQuota = useCallback(async (projectId: string) => {
     if (!projectId) return;
@@ -228,11 +250,11 @@ export function ProjectQuotasPage() {
     } catch (cause) {
       setQuota(null);
       setDraft(null);
-      setError(cause instanceof Error ? cause.message : "加载项目配额失败");
+      setError(cause instanceof Error ? cause.message : t("quotas.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setEditing(false);
@@ -240,8 +262,8 @@ export function ProjectQuotasPage() {
   }, [loadQuota, selectedId]);
 
   const metrics = useMemo(
-    () => (quota && draft ? metricViews(quota, draft) : []),
-    [draft, quota],
+    () => (quota && draft ? metricViews(quota, draft, t, format) : []),
+    [draft, format, quota, t],
   );
 
   const selectProject = (projectId: string) => {
@@ -260,14 +282,14 @@ export function ProjectQuotasPage() {
     setSaving(true);
     setError(null);
     try {
-      const next = await updateProjectQuotas(quota.project_id, updateFrom(draft));
+      const next = await updateProjectQuotas(quota.project_id, updateFrom(draft, t));
       setQuota(next);
       setDraft(draftFrom(next));
       setEditing(false);
-      setToast("项目配额已保存");
+      setToast(t("quotas.saved"));
       window.setTimeout(() => setToast(null), 3000);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "保存项目配额失败");
+      setError(cause instanceof Error ? cause.message : t("quotas.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -284,11 +306,11 @@ export function ProjectQuotasPage() {
       <header role="presentation" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="flex h-8 w-8 items-center justify-center text-pulse"><Gauge size={19} /></span>
         <div className="min-w-0">
-          <h1 className="workspace-page-title">AgentCanvas Quotas</h1>
-          <p className="font-mono text-[9px] uppercase text-ghost/50">project / usage / headroom</p>
+          <h1 className="workspace-page-title">{t("quotas.title")}</h1>
+          <p className="font-mono text-[9px] uppercase text-ghost/50">{t("quotas.eyebrow")}</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
-          <button type="button" onClick={() => void loadQuota(selectedId)} disabled={loading || !selectedId} className="flex h-8 w-8 items-center justify-center rounded-md text-ghost transition hover:bg-line hover:text-pulse disabled:opacity-40" title="刷新配额">
+          <button type="button" onClick={() => void loadQuota(selectedId)} disabled={loading || !selectedId} className="flex h-8 w-8 items-center justify-center rounded-md text-ghost transition hover:bg-line hover:text-pulse disabled:opacity-40" title={t("quotas.refresh")}>
             <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
           </button>
         </div>
@@ -298,7 +320,7 @@ export function ProjectQuotasPage() {
         <div className="relative z-10 flex min-h-9 items-center gap-2 border-b border-bad/30 bg-bad/10 px-4 text-xs text-bad">
           <TriangleAlert size={13} />
           <span className="min-w-0 flex-1">{error}</span>
-          <button type="button" onClick={() => setError(null)} className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-bad/10" title="关闭"><X size={13} /></button>
+          <button type="button" onClick={() => setError(null)} className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-bad/10" title={t("quotas.close")}><X size={13} /></button>
         </div>
       )}
 
@@ -306,44 +328,44 @@ export function ProjectQuotasPage() {
         <div className="mx-auto w-full max-w-6xl">
           <section className="flex flex-col gap-3 border-b border-line bg-ink/45 px-4 py-4 sm:px-6 lg:flex-row lg:items-end">
             <label className="min-w-0 flex-1">
-              <span className="mb-1.5 block font-mono text-[9px] uppercase text-ghost/50">项目</span>
+              <span className="mb-1.5 block font-mono text-[9px] uppercase text-ghost/50">{t("quotas.project")}</span>
               <div className="relative">
                 <FolderKanban size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pulse" />
-                <select aria-label="选择项目" value={selectedId} onChange={(event) => selectProject(event.target.value)} disabled={loadingProjects || projects.length === 0} className="field-input h-10 py-0 pl-9">
-                  {projects.length === 0 && <option value="">没有可访问的项目</option>}
+                <select aria-label={t("quotas.chooseProject")} value={selectedId} onChange={(event) => selectProject(event.target.value)} disabled={loadingProjects || projects.length === 0} className="field-input h-10 py-0 pl-9">
+                  {projects.length === 0 && <option value="">{t("quotas.noProjects")}</option>}
                   {projects.map((project) => <option key={project.id} value={project.id}>{project.name} / {project.slug}</option>)}
                 </select>
               </div>
             </label>
             <div className="grid shrink-0 grid-cols-2 gap-3 lg:w-[22rem]">
               <div>
-                <span className="font-mono text-[9px] uppercase text-ghost/50">周期</span>
-                <p className="mt-1 text-xs text-ice">{quota ? new Date(`${quota.period_start}T00:00:00Z`).toLocaleDateString("zh-CN", { year: "numeric", month: "long", timeZone: "UTC" }) : "—"}</p>
+                <span className="font-mono text-[9px] uppercase text-ghost/50">{t("quotas.period")}</span>
+                <p className="mt-1 text-xs text-ice">{quota ? new Date(`${quota.period_start}T00:00:00Z`).toLocaleDateString(format.tag, { year: "numeric", month: "long", timeZone: "UTC" }) : "—"}</p>
               </div>
               <div>
-                <span className="font-mono text-[9px] uppercase text-ghost/50">权限</span>
-                <p className={quota?.can_update ? "mt-1 text-xs text-ok" : "mt-1 text-xs text-ghost"}>{quota?.can_update ? "可配置" : "只读"}</p>
+                <span className="font-mono text-[9px] uppercase text-ghost/50">{t("quotas.permission")}</span>
+                <p className={quota?.can_update ? "mt-1 text-xs text-ok" : "mt-1 text-xs text-ghost"}>{quota?.can_update ? t("quotas.writable") : t("quotas.readonly")}</p>
               </div>
             </div>
             <div className="flex shrink-0 justify-end gap-1.5">
               {quota?.can_update && !editing && (
-                <button type="button" onClick={() => setEditing(true)} className="flex h-9 items-center gap-1.5 rounded-md border border-line bg-ink px-3 text-xs text-ice transition hover:border-pulse/40 hover:text-pulse"><Pencil size={13} />编辑</button>
+                <button type="button" onClick={() => setEditing(true)} className="flex h-9 items-center gap-1.5 rounded-md border border-line bg-ink px-3 text-xs text-ice transition hover:border-pulse/40 hover:text-pulse"><Pencil size={13} />{t("quotas.edit")}</button>
               )}
               {quota?.can_update && editing && (
                 <>
-                  <button type="button" onClick={cancelEdit} disabled={saving} className="flex h-9 w-9 items-center justify-center rounded-md border border-line text-ghost transition hover:text-ice disabled:opacity-40" title="取消编辑"><X size={14} /></button>
-                  <button type="button" onClick={() => void save()} disabled={saving} className="flex h-9 items-center gap-1.5 rounded-md bg-pulse px-3 text-xs font-semibold text-void transition hover:brightness-110 disabled:opacity-40">{saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}保存</button>
+                  <button type="button" onClick={cancelEdit} disabled={saving} className="flex h-9 w-9 items-center justify-center rounded-md border border-line text-ghost transition hover:text-ice disabled:opacity-40" title={t("quotas.cancelEdit")}><X size={14} /></button>
+                  <button type="button" onClick={() => void save()} disabled={saving} className="flex h-9 items-center gap-1.5 rounded-md bg-pulse px-3 text-xs font-semibold text-void transition hover:brightness-110 disabled:opacity-40">{saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}{t("quotas.save")}</button>
                 </>
               )}
             </div>
           </section>
 
           {loadingProjects || (loading && !quota) ? (
-            <div className="flex h-56 items-center justify-center gap-2 text-ghost"><Loader2 size={15} className="animate-spin" /><span className="text-xs">加载项目配额…</span></div>
+            <div className="flex h-56 items-center justify-center gap-2 text-ghost"><Loader2 size={15} className="animate-spin" /><span className="text-xs">{t("quotas.loading")}</span></div>
           ) : !selected ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-ghost/55"><FolderKanban size={24} /><p className="text-xs">当前没有可访问的项目</p></div>
+            <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-ghost/55"><FolderKanban size={24} /><p className="text-xs">{t("quotas.noAccessibleProject")}</p></div>
           ) : quota && draft ? (
-            <section aria-label="项目配额指标" className="border-b border-line bg-void/50">
+            <section aria-label={t("quotas.metricsAria")} className="border-b border-line bg-void/50">
               {metrics.map((metric) => (
                 <QuotaMetricRow key={metric.key} metric={metric} editing={editing} disabled={saving} onDraftChange={(value) => changeDraft(metric.key, value)} />
               ))}

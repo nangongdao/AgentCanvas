@@ -206,6 +206,15 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   before it reaches the operator. The endpoint is admin-gated, carries its own
   rate-limit budget, and records an audit event. The demo (mock) provider answers
   from a canned catalog, so discovery is demonstrable without an API key.
+- Usage export and billing reconciliation on the cost surface (C7-1). The
+  platform-wide metering hand-off and the month digest were API-only; the cost
+  governance page now exports raw `usage_daily_facts` for a window as CSV or
+  JSON and reads the deterministic reconciliation digest with its accumulated
+  totals, day count, and scope. The download goes through the credentialed
+  client wrapper and is buffered, so an expired session still refreshes and
+  retries like any other API call and a refusal lands as an inline message
+  instead of saving an error page; an inverted window, or one wider than the
+  server's 366-day limit, is refused before a request is spent.
 
 ### Changed
 
@@ -217,6 +226,16 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
 - SQLite workflow schedule dispatch now retries transient database-lock
   conflicts with bounded fresh-session backoff while preserving exactly-once
   slot claims; PostgreSQL and non-lock failures keep their prior behavior.
+- The cost-governance, project-quota, audit-log, and members surfaces, plus the
+  platform announcement strip, are now fully bilingual. Every label, empty
+  state, error message, and the 35 audit action names resolve through the shared
+  dictionaries — the action names live in a typed list, so an action added to
+  the backend before its translation still renders as its raw id instead of
+  leaking a translation key — and quota periods, member join dates, and ticket
+  counts follow the active locale's number and date formats. Page headings that
+  had stayed English brand marks (`AgentCanvas Cost Governance`,
+  `AgentCanvas Audit Log`, `AgentCanvas Quotas`) now match the navigation labels
+  they sit under.
 
 ### Security
 

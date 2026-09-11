@@ -28,11 +28,11 @@ test("cost governance page renders ceilings and alert summary", async ({ page })
   await page.goto("/cost");
   await login(page, "admin");
 
-  await expect(page.getByText("AgentCanvas Cost Governance")).toBeVisible();
-  await expect(page.getByText("Per-Execution Ceilings")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "成本治理", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "单次执行上限", exact: true })).toBeVisible();
   await expect(page.getByText("token / 执行")).toBeVisible();
   await expect(page.getByText("费用上限 / 执行")).toBeVisible();
-  await expect(page.getByText("Alert Summary")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "告警汇总", exact: true })).toBeVisible();
   await expect(page.getByText("调用次数 / 执行")).toBeVisible();
 
   // C5-11: the cost surface carries no critical/serious axe violations.

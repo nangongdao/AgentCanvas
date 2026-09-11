@@ -3,6 +3,7 @@ import { Megaphone, X } from "lucide-react";
 
 import { listActiveAnnouncements } from "@/api/endpoints/adminConsole";
 import type { Announcement } from "@/api/endpoints/adminConsole";
+import { useT } from "@/features/i18n/i18n";
 
 const DISMISS_STORAGE_KEY = "agentcanvas:dismissed-announcements";
 
@@ -46,6 +47,7 @@ const LEVEL_STYLES: Record<string, string> = {
  * reappears.
  */
 export function AnnouncementBanner() {
+  const t = useT();
   const [visible, setVisible] = useState<Announcement[]>([]);
 
   const refresh = useCallback(async () => {
@@ -84,7 +86,7 @@ export function AnnouncementBanner() {
   return (
     <div
       role="region"
-      aria-label="平台公告"
+      aria-label={t("shell.announcementRegion")}
       className="flex shrink-0 flex-col gap-px border-b border-line"
     >
       {visible.map((announcement) => (
@@ -101,7 +103,7 @@ export function AnnouncementBanner() {
           <button
             type="button"
             onClick={() => dismiss(announcement)}
-            aria-label="关闭公告"
+            aria-label={t("shell.dismissAnnouncement")}
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded transition hover:bg-line/60"
           >
             <X size={11} />

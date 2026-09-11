@@ -16,16 +16,17 @@ import {
   type Membership,
   type OrganizationRef,
 } from "@/api/endpoints/members";
-
-const ROLE_LABELS: Record<MemberRole, string> = {
-  viewer: "查看者",
-  editor: "编辑者",
-  admin: "管理员",
-};
+import { useT, useI18nStore, type Translate, type TranslationKey } from "@/features/i18n/i18n";
 
 const ROLE_ORDER: MemberRole[] = ["viewer", "editor", "admin"];
 
+function roleLabel(role: MemberRole, t: Translate): string {
+  return t(`members.role.${role}` as TranslationKey);
+}
+
 export function MembersPage() {
+  const t = useT();
+  const locale = useI18nStore((state) => (state.locale === "zh" ? "zh-CN" : "en-US"));
   const [organizations, setOrganizations] = useState<OrganizationRef[]>([]);
   const [organizationId, setOrganizationId] = useState<string>("");
   const [members, setMembers] = useState<Membership[]>([]);
@@ -44,9 +45,9 @@ export function MembersPage() {
         setOrganizations(orgs);
         setOrganizationId((current) => current || orgs[0]?.id || "");
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "加载组织失败"))
+      .catch((err) => setError(err instanceof Error ? err.message : t("members.loadOrgFailed")))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const reload = useCallback(async () => {
     if (!organizationId) return;
@@ -59,9 +60,9 @@ export function MembersPage() {
       setMembers(memberRows);
       setInvitations(invitationRows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载成员失败");
+      setError(err instanceof Error ? err.message : t("members.loadFailed"));
     }
-  }, [organizationId]);
+  }, [organizationId, t]);
 
   useEffect(() => {
     void reload();
@@ -87,12 +88,12 @@ export function MembersPage() {
       setEmail("");
       setNotice(
         result.delivery === "email"
-          ? "邀请已发送到邮箱;以下链接同样有效(单次使用)。"
-          : "SMTP 未配置:请把以下一次性链接发给被邀请人。",
+          ? t("members.noticeEmail")
+          : t("members.noticeManual"),
       );
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建邀请失败");
+      setError(err instanceof Error ? err.message : t("members.inviteFailed"));
     } finally {
       setBusy(false);
     }
@@ -106,7 +107,7 @@ export function MembersPage() {
       await updateMemberRole(organizationId, membership.user_id, next);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "更新角色失败");
+      setError(err instanceof Error ? err.message : t("members.roleFailed"));
     } finally {
       setBusy(false);
     }
@@ -119,7 +120,7 @@ export function MembersPage() {
       await removeMember(organizationId, membership.user_id);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "移除成员失败");
+      setError(err instanceof Error ? err.message : t("members.removeFailed"));
     } finally {
       setBusy(false);
     }
@@ -132,7 +133,7 @@ export function MembersPage() {
       await revokeInvitation(organizationId, invitation.id);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "撤销邀请失败");
+      setError(err instanceof Error ? err.message : t("members.revokeFailed"));
     } finally {
       setBusy(false);
     }
@@ -149,14 +150,14 @@ export function MembersPage() {
         </span>
         <div className="min-w-0">
           <h1 className="workspace-page-title">
-            成员与邀请
+            {t("members.title")}
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">
-            memberships / invitations / roles
+            {t("members.eyebrow")}
           </p>
         </div>
         <label className="ml-auto flex items-center gap-2 text-xs text-ghost" htmlFor="members-org">
-          组织
+          {t("members.org")}
           <select
             id="members-org"
             value={organizationId}
@@ -180,23 +181,23 @@ export function MembersPage() {
             </p>
           )}
           {loading ? (
-            <p className="font-mono text-[10px] uppercase text-ghost">loading…</p>
+            <p className="font-mono text-[10px] uppercase text-ghost">{t("members.loading")}</p>
           ) : organizations.length === 0 ? (
             <p className="font-mono text-[10px] text-ghost">
-              你还不属于任何组织;请让组织管理员发送邀请链接。
+              {t("members.noOrg")}
             </p>
           ) : (
             <>
-              <section aria-label="成员列表" className="glass rounded-lg border border-line p-4">
-                <h2 className="mb-3 font-display text-sm font-semibold">成员</h2>
+              <section aria-label={t("members.membersAria")} className="glass rounded-lg border border-line p-4">
+                <h2 className="mb-3 font-display text-sm font-semibold">{t("members.membersHeading")}</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[560px] text-left text-xs">
                     <thead>
                       <tr className="font-mono text-[9px] uppercase text-ghost">
-                        <th className="py-1 pr-3">用户</th>
-                        <th className="py-1 pr-3">角色</th>
-                        <th className="py-1 pr-3">加入时间</th>
-                        <th className="py-1">操作</th>
+                        <th className="py-1 pr-3">{t("members.col.user")}</th>
+                        <th className="py-1 pr-3">{t("members.col.role")}</th>
+                        <th className="py-1 pr-3">{t("members.col.joined")}</th>
+                        <th className="py-1">{t("members.col.actions")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -207,7 +208,7 @@ export function MembersPage() {
                           </td>
                           <td className="py-1.5 pr-3">
                             <label className="sr-only" htmlFor={`role-${membership.id}`}>
-                              角色
+                              {t("members.col.role")}
                             </label>
                             <select
                               id={`role-${membership.id}`}
@@ -223,14 +224,14 @@ export function MembersPage() {
                             >
                               {ROLE_ORDER.map((option) => (
                                 <option key={option} value={option}>
-                                  {ROLE_LABELS[option]}
+                                  {roleLabel(option, t)}
                                 </option>
                               ))}
                             </select>
                           </td>
                           <td className="py-1.5 pr-3 font-mono text-[10px] text-ghost">
                             {membership.created_at
-                              ? new Date(membership.created_at).toLocaleDateString()
+                              ? new Date(membership.created_at).toLocaleDateString(locale)
                               : "—"}
                           </td>
                           <td className="py-1.5">
@@ -240,7 +241,7 @@ export function MembersPage() {
                               onClick={() => void remove(membership)}
                               className="rounded border border-bad/40 px-2 py-0.5 text-[10px] text-bad transition hover:bg-bad/10 disabled:opacity-50"
                             >
-                              移除
+                              {t("members.remove")}
                             </button>
                           </td>
                         </tr>
@@ -250,14 +251,14 @@ export function MembersPage() {
                 </div>
               </section>
 
-              <section aria-label="邀请管理" className="glass rounded-lg border border-line p-4">
+              <section aria-label={t("members.invitationsAria")} className="glass rounded-lg border border-line p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <UserPlus size={15} className="text-ok" />
-                  <h2 className="font-display text-sm font-semibold">邀请</h2>
+                  <h2 className="font-display text-sm font-semibold">{t("members.invitationsHeading")}</h2>
                 </div>
                 <form onSubmit={submit} className="mb-3 flex flex-wrap gap-2">
                   <label className="sr-only" htmlFor="invite-email">
-                    被邀请人邮箱
+                    {t("members.inviteeEmail")}
                   </label>
                   <input
                     id="invite-email"
@@ -270,7 +271,7 @@ export function MembersPage() {
                     className="min-w-0 flex-1 rounded border border-line bg-void px-2 py-1.5 text-xs text-ice placeholder:text-ghost/60 focus:outline-none focus:ring-1 focus:ring-pulse"
                   />
                   <label className="sr-only" htmlFor="invite-role">
-                    邀请角色
+                    {t("members.inviteRole")}
                   </label>
                   <select
                     id="invite-role"
@@ -280,7 +281,7 @@ export function MembersPage() {
                   >
                     {ROLE_ORDER.map((option) => (
                       <option key={option} value={option}>
-                        {ROLE_LABELS[option]}
+                        {roleLabel(option, t)}
                       </option>
                     ))}
                   </select>
@@ -289,7 +290,7 @@ export function MembersPage() {
                     disabled={busy || !email.trim()}
                     className="rounded border border-pulse/60 bg-pulse/10 px-3 py-1.5 text-xs text-pulse transition hover:bg-pulse/20 disabled:opacity-50"
                   >
-                    生成邀请
+                    {t("members.generate")}
                   </button>
                 </form>
                 {notice && issued && (
@@ -313,10 +314,12 @@ export function MembersPage() {
                           {invitation.email}
                         </span>
                         <span className="rounded bg-line/60 px-1.5 py-0.5 text-[10px] text-ghost">
-                          {ROLE_LABELS[invitation.role]}
+                          {roleLabel(invitation.role, t)}
                         </span>
                         <span className="font-mono text-[10px] text-ghost">
-                          {new Date(invitation.expires_at).toLocaleDateString()} 过期
+                          {t("members.expiresAt", {
+                            date: new Date(invitation.expires_at).toLocaleDateString(locale),
+                          })}
                         </span>
                         <button
                           type="button"
@@ -324,14 +327,14 @@ export function MembersPage() {
                           onClick={() => void revoke(invitation)}
                           className="rounded border border-bad/40 px-2 py-0.5 text-[10px] text-bad transition hover:bg-bad/10 disabled:opacity-50"
                         >
-                          撤销
+                          {t("members.revoke")}
                         </button>
                       </li>
                     ))}
                   </ul>
                 )}
                 <p className="mt-3 font-mono text-[9px] uppercase text-ghost">
-                  邀请链接单次有效;接受入口{" "}
+                  {t("members.singleUse")}{" "}
                   <Link to="/invitations/accept" className="underline">
                     /invitations/accept
                   </Link>

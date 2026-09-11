@@ -1,46 +1,56 @@
 import { Box, Building2, Fingerprint, FolderKanban } from "lucide-react";
 
 import type { AuditLogDTO } from "@/api/endpoints/auditLogs";
+import { useT, type Translate, type TranslationKey } from "@/features/i18n/i18n";
 import { cn } from "@/utils/cn";
 
-const ACTION_LABEL: Record<string, string> = {
-  "organization.created": "创建组织",
-  "project.created": "创建项目",
-  "project_quota.updated": "更新项目配额",
-  "membership.added": "添加成员",
-  "membership.role_changed": "变更成员角色",
-  "membership.removed": "移除成员",
-  "model.created": "创建模型",
-  "model.updated": "更新模型",
-  "model.deleted": "删除模型",
-  "mcp_server.created": "创建 MCP",
-  "mcp_server.updated": "更新 MCP",
-  "mcp_server.deleted": "删除 MCP",
-  "mcp_server.catalog_bound": "绑定 MCP Catalog",
-  "mcp_server.catalog_unbound": "解除 MCP Catalog",
-  "mcp_server.catalog_rollout": "升级 MCP Catalog",
-  "mcp_catalog.created": "创建 MCP Catalog",
-  "mcp_catalog.version_created": "登记 MCP 版本",
-  "mcp_catalog.version_approved": "批准 MCP 版本",
-  "mcp_catalog.version_revoked": "撤销 MCP 版本",
-  "mcp_catalog.rollout": "执行 MCP rollout",
-  "service_account.created": "创建服务账号",
-  "service_account.updated": "更新服务账号",
-  "service_account.deleted": "删除服务账号",
-  "api_token.issued": "签发 API Token",
-  "api_token.revoked": "吊销 API Token",
-  "workflow.created": "创建工作流",
-  "workflow.updated": "更新工作流",
-  "workflow.merged": "合并工作流",
-  "workflow.archived": "归档工作流",
-  "workflow.imported": "导入工作流",
-  "workflow.cloned": "克隆工作流",
-  "workflow_version.published": "发布版本",
-  "workflow_version.rolled_back": "回滚版本",
-  "workflow_review.requested": "发起审阅",
-  "workflow_review.decided": "完成审阅",
-  "human_approval.submitted": "提交人工审批",
-};
+/** Every action id the dictionaries translate (`audit.action.<id>`). Actions
+ * outside this list render verbatim, so a new backend action degrades to its
+ * raw id instead of leaking a translation key into the UI. */
+export const AUDIT_ACTIONS = [
+  "organization.created",
+  "project.created",
+  "project_quota.updated",
+  "membership.added",
+  "membership.role_changed",
+  "membership.removed",
+  "model.created",
+  "model.updated",
+  "model.deleted",
+  "mcp_server.created",
+  "mcp_server.updated",
+  "mcp_server.deleted",
+  "mcp_server.catalog_bound",
+  "mcp_server.catalog_unbound",
+  "mcp_server.catalog_rollout",
+  "mcp_catalog.created",
+  "mcp_catalog.version_created",
+  "mcp_catalog.version_approved",
+  "mcp_catalog.version_revoked",
+  "mcp_catalog.rollout",
+  "service_account.created",
+  "service_account.updated",
+  "service_account.deleted",
+  "api_token.issued",
+  "api_token.revoked",
+  "workflow.created",
+  "workflow.updated",
+  "workflow.merged",
+  "workflow.archived",
+  "workflow.imported",
+  "workflow.cloned",
+  "workflow_version.published",
+  "workflow_version.rolled_back",
+  "workflow_review.requested",
+  "workflow_review.decided",
+  "human_approval.submitted",
+] as const;
+
+export function actionLabel(action: string, t: Translate): string {
+  return (AUDIT_ACTIONS as readonly string[]).includes(action)
+    ? t(`audit.action.${action}` as TranslationKey)
+    : action;
+}
 
 function actionTone(action: string): string {
   if (action.endsWith(".deleted") || action.endsWith(".revoked")) {
@@ -63,6 +73,7 @@ function detailValue(value: unknown): string {
 }
 
 export function AuditLogRow({ entry }: { entry: AuditLogDTO }) {
+  const t = useT();
   return (
     <article className="grid min-w-0 gap-3 border-b border-line/80 px-3 py-3 transition hover:bg-ink/55 sm:px-4 lg:grid-cols-[10.5rem_minmax(10rem,1fr)_minmax(12rem,1.35fr)_minmax(14rem,1.7fr)] lg:items-start">
       <div className="min-w-0">
@@ -95,7 +106,7 @@ export function AuditLogRow({ entry }: { entry: AuditLogDTO }) {
             )}
             title={entry.action}
           >
-            {ACTION_LABEL[entry.action] ?? entry.action}
+            {actionLabel(entry.action, t)}
           </span>
           <span className="font-mono text-[9px] text-ghost/50">{entry.resource_type}</span>
         </div>
@@ -142,11 +153,9 @@ export function AuditLogRow({ entry }: { entry: AuditLogDTO }) {
             ))}
           </dl>
         ) : (
-          <span className="font-mono text-[9px] text-ghost/35">no details</span>
+          <span className="font-mono text-[9px] text-ghost/35">{t("audit.noDetails")}</span>
         )}
       </div>
     </article>
   );
 }
-
-export { ACTION_LABEL };

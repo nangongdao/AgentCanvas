@@ -82,7 +82,7 @@ test("project quotas configure limits and enforce concurrency, storage, and memb
 
   await page.goto(`/quotas?project_id=${projectId}`);
   await loginAccount(page, ownerEmail);
-  await expect(page.getByText("AgentCanvas Quotas", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "项目配额", exact: true })).toBeVisible();
   await expect(page.getByLabel("选择项目")).toHaveValue(projectId);
   await expect(page.getByText("可配置", { exact: true })).toBeVisible();
 

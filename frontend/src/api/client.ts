@@ -170,3 +170,43 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   if (!res.ok) throw await responseError(res);
   return res.json() as Promise<T>;
 }
+
+/** Filename advertised by a `Content-Disposition: attachment` response. */
+function attachmentFilename(res: Response, fallback: string): string {
+  const header = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header);
+  const raw = match?.[1]?.trim();
+  if (!raw) return fallback;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Fetch a credentialed endpoint and hand its body to the browser as a file
+ * download. The response is buffered so an error status still surfaces as an
+ * `ApiError` instead of a downloaded error page, and the session-refresh
+ * retry in `apiFetch` keeps working — a bare `<a href>` would bypass both.
+ * Returns the saved filename (server-advertised when available). */
+export async function apiDownload(path: string, fallbackName: string): Promise<string> {
+  const res = await apiFetch(path, {
+    credentials: "include",
+    headers: { Accept: "*/*" },
+  });
+  if (!res.ok) throw await responseError(res);
+  const filename = attachmentFilename(res, fallbackName);
+  const url = URL.createObjectURL(await res.blob());
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return filename;
+}
