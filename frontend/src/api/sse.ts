@@ -4,6 +4,7 @@ import type {
   ExecutionEventContract,
   ExecutionEventType,
 } from "@/api/contracts";
+import { backendUrl } from "@/api/backendOrigin";
 
 export type SseHandler = (event: MessageEvent) => void;
 
@@ -83,7 +84,7 @@ export class ResilientSSE {
     const after = Number(this.lastEventId) || 0;
     const fullUrl = after > 0 ? `${this.url}${sep}after=${after}` : this.url;
 
-    const es = new EventSource(fullUrl);
+    const es = new EventSource(backendUrl(fullUrl));
     this.es = es;
 
     es.onopen = () => {
@@ -197,7 +198,7 @@ export class MultiplexSSE {
         .join(",");
       params.set("after", cursor);
     }
-    const es = new EventSource(`${MULTI_PATH}?${params.toString()}`);
+    const es = new EventSource(backendUrl(`${MULTI_PATH}?${params.toString()}`));
     this.es = es;
 
     es.onopen = () => {

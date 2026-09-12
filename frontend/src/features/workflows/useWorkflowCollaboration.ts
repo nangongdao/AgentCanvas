@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { backendUrl } from "@/api/backendOrigin";
 
 import { ApiError } from "@/api/client";
 import {
@@ -156,7 +157,7 @@ export function useWorkflowCollaboration(
 
     const openStream = () => {
       source = new EventSource(
-        workflowCollaborationStreamUrl(workflowId, clientId),
+        backendUrl(workflowCollaborationStreamUrl(workflowId, clientId)),
         { withCredentials: true },
       );
       source.addEventListener("snapshot", (event) => {

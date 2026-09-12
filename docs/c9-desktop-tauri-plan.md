@@ -129,10 +129,11 @@
 >
 > 两层相加是构造性结论:**任何经 `register_(a)synchronous_uri_scheme_protocol` 的响应都不可能增量到达页面**,不是可修的 bug 而是公开 API 不表达这种能力。因此不再需要运行时复测——单次实验只能证明某一次缓冲,源码证明的是不存在另一条路径。理论出路是对 wry 打叉改用自实现 `IStream` 活管道,但这超出本计划的成本边界,不做。
 >
-> **采用方案 B'**,并在此固化三个实现要点(正式 C9-1 按此执行):
-> - REST 仍走协议代理(缓冲语义对 JSON API 恰好正确,前端 fetch 零改动);
-> - 三处 SSE(`api/sse.ts` ×2、`useWorkflowCollaboration.ts` ×1)直连 `http://127.0.0.1:<动态端口>`,端口由 Rust 初始化脚本注入(如 `window.__AGENTCANVAS_BACKEND_ORIGIN__`);
-> - 后端 CORS 显式放行 **`tauri://localhost` 与 Windows 变体 `http://tauri.localhost`**(WebView2 下自定义协议页面的实际 origin 是后者),拒绝通配 `*`,且桌面模式下不启用 HSTS(见 5.2)。
+> **采用方案 B'(2026-09-12 实现修订:代理整段取消)**:实现期审计发现前端 REST 全部集中在 `apiFetch`(`frontend/src/api/client.ts`)一个包装器里,方案 A 的「改所有调用点」实际只是**一处前缀**。最终形态:
+> - **全部流量直连** `http://127.0.0.1:<动态端口>`——壳不做任何请求转发;origin 由初始化脚本在应用脚本前注入为 `window.__AGENTCANVAS_BACKEND_ORIGIN__`(web/dev 不注入,保持相对路径 + Vite proxy);
+> - REST 走 `apiFetch` 前缀、三处 SSE(`api/sse.ts` ×2、`useWorkflowCollaboration.ts` ×1)与 runtime/collaboration fetch 同一 helper(`src/api/backendOrigin.ts`)前缀;
+> - 单一 cookie 罐:登录 Set-Cookie 与后续请求同源(sidecar origin),后端 CORS 本就 `allow_credentials=True` + 显式 origin 列表;
+> - 后端 CORS 显式放行 **`tauri://localhost` 与 Windows 变体 `http://tauri.localhost`**(desktop profile 已追加),拒绝通配 `*`,且桌面模式下不启用 HSTS(见 5.2)。
 
 ### 3.3 嵌入 Python 运行时
 
@@ -234,10 +235,10 @@
 
 ### 5.2 CORS / CSP 放行 Tauri origin
 
-C8 落地了站点级安全头与 HSTS。桌面下:
-- REST 走 3.2 方案 B 的协议代理部分,前端与后端在自定义协议内**同源**,CORS 不需放开——这是混合方案保留的收益。
-- SSE 按 3.2 已定的 B' 直连 sidecar,必须显式放行 `tauri://localhost` 与 **Windows 变体 `http://tauri.localhost`**(WebView2 下自定义协议页面的实际 origin)。**不能用 `allow_origins=["*"]`**,凭据请求下无效且是安全退步。
-- CSP 需要容纳 `tauri://` / `http://tauri.localhost` 与自托管字体,并为 SSE 直连目标(`http://127.0.0.1:<port>`)加 `connect-src`;桌面模式下不应保留 HSTS(无 HTTPS 语义)。
+C8 落地了站点级安全头与 HSTS。桌面下(2026-09-12 实现修订:REST 与 SSE 均直连,无代理):
+- 必须显式放行 `tauri://localhost` 与 **Windows 变体 `http://tauri.localhost`**(WebView2 下自定义协议页面的实际 origin)——desktop profile 已追加;**不能用 `allow_origins=["*"]`**,凭据请求下无效且是安全退步。
+- 后端 CORS 保持 `allow_credentials=True`:登录 Set-Cookie 与后续请求同源指向 sidecar origin(`http://127.0.0.1:<port>`),cookie 罐一致。
+- CSP 需要容纳 `tauri://` / `http://tauri.localhost` 与自托管字体,并为直连目标(`http://127.0.0.1:<port>`)加 `connect-src`;桌面模式下不应保留 HSTS(无 HTTPS 语义)。
 
 ### 5.3 sidecar 就绪与优雅退出
 

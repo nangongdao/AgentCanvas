@@ -1,5 +1,7 @@
 /** Public application runtime API endpoints (C3-2). */
 
+import { backendUrl } from "@/api/backendOrigin";
+
 export interface InputFieldDef {
   name: string;
   type: string;
@@ -70,7 +72,7 @@ export async function upsertRuntimeFeedback(
   comment = "",
 ): Promise<RuntimeFeedbackDTO> {
   const res = await fetch(
-    `/api/apps/p/${slug}/sessions/${sessionId}/messages/${messageId}/feedback${tokenQuery(token)}`,
+    backendUrl(`/api/apps/p/${slug}/sessions/${sessionId}/messages/${messageId}/feedback${tokenQuery(token)}`),
     {
       method: "POST",
       credentials: "include",
@@ -114,7 +116,7 @@ export async function resolveRuntimeApp(
   slug: string,
   token: string | null,
 ): Promise<AppRuntimeOut> {
-  const res = await fetch(`/api/apps/p/${slug}${tokenQuery(token)}`, {
+  const res = await fetch(backendUrl(`/api/apps/p/${slug}${tokenQuery(token)}`), {
     credentials: "include",
     headers: { Accept: "application/json" },
   });
@@ -128,7 +130,7 @@ export async function createRuntimeSession(
   token: string | null,
   body: AppRuntimeSessionCreate,
 ): Promise<ChatMessageDTO> {
-  const res = await fetch(`/api/apps/p/${slug}/sessions${tokenQuery(token)}`, {
+  const res = await fetch(backendUrl(`/api/apps/p/${slug}/sessions${tokenQuery(token)}`), {
     method: "POST",
     credentials: "include",
     headers: {
@@ -148,7 +150,7 @@ export async function listRuntimeMessages(
   sessionId: string,
 ): Promise<ChatMessageDTO[]> {
   const res = await fetch(
-    `/api/apps/p/${slug}/sessions/${sessionId}/messages${tokenQuery(token)}`,
+    backendUrl(`/api/apps/p/${slug}/sessions/${sessionId}/messages${tokenQuery(token)}`),
     { credentials: "include", headers: { Accept: "application/json" } },
   );
   if (!res.ok) throw new ApiRuntimeError(res.status, await detailOf(res));
@@ -181,7 +183,7 @@ export function sendRuntimeMessage(
   void (async () => {
     try {
       const res = await fetch(
-        `/api/apps/p/${slug}/sessions/${sessionId}/send${tokenQuery(token)}`,
+        backendUrl(`/api/apps/p/${slug}/sessions/${sessionId}/send${tokenQuery(token)}`),
         {
           method: "POST",
           credentials: "include",

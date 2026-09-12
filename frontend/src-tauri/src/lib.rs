@@ -123,9 +123,9 @@ fn start_backend_and_swap_windows(app: tauri::AppHandle) {
     };
 
     match started {
-        Ok(_) => {
+        Ok(origin) => {
             emit_splash(&app, "splash:ready", serde_json::json!({}));
-            open_main_window(&app);
+            open_main_window(&app, &origin);
         }
         Err(message) => {
             // The splash stays up as the failure surface: diagnostics plus the
@@ -192,19 +192,27 @@ fn close_splash(app: &tauri::AppHandle) {
     }
 }
 
-fn open_main_window(app: &tauri::AppHandle) {
-    // Dev loads the Vite server (build.devUrl); the packaged app loads the
-    // embedded dist over the custom protocol. Either way the UI discovers
-    // the backend origin at runtime (ADR 0003, verdict B').
+fn open_main_window(app: &tauri::AppHandle, backend_origin: &str) {
+    // Dev loads the Vite server (build.devUrl) and keeps same-origin relative
+    // paths behind the Vite proxy. The packaged app loads the embedded dist
+    // over the custom scheme, so it must learn the sidecar origin before any
+    // application script runs (ADR 0003 amendment: the centralized apiFetch
+    // and the SSE consumers prefix every request with it).
     let url = if tauri::is_dev() {
         WebviewUrl::External("http://127.0.0.1:5173".parse().expect("dev url"))
     } else {
         WebviewUrl::default()
     };
-    let _ = WebviewWindowBuilder::new(app, "main", url)
+    let mut builder = WebviewWindowBuilder::new(app, "main", url)
         .title("AgentCanvas")
         .inner_size(1440.0, 900.0)
-        .min_inner_size(1024.0, 640.0)
-        .build();
+        .min_inner_size(1024.0, 640.0);
+    if !tauri::is_dev() {
+        let injected = serde_json::to_string(backend_origin).expect("origin json");
+        builder = builder.initialization_script(format!(
+            "window.__AGENTCANVAS_BACKEND_ORIGIN__ = {injected};"
+        ));
+    }
+    let _ = builder.build();
     close_splash(app);
 }

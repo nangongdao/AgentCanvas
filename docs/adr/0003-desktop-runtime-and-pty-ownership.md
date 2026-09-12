@@ -63,14 +63,21 @@ would see the whole stream land at once after the upstream ends. The
 alternative of forking wry with a live `IStream` is outside the plan's cost
 envelope.
 
-Therefore: REST rides the protocol proxy (buffering is exactly right for
-JSON, and the frontend `fetch` surface stays untouched), while the three SSE
-consumers (`api/sse.ts` twice, `useWorkflowCollaboration.ts` once) connect
-**directly** to `http://127.0.0.1:<dynamic port>` — the port injected into
-the page by a Rust initialization script. The backend desktop profile adds
-both Tauri origins to the CORS allow-list (`tauri://localhost`,
-`http://tauri.localhost`; never `*`), desktop mode never emits HSTS, and the
-page CSP's `connect-src` must include the direct loopback target.
+Therefore the plan kept a protocol proxy for REST and went direct only for
+SSE. **Implementation amendment (2026-09-12, same date)**: audit of the
+frontend showed the entire REST surface is already centralized behind one
+wrapper (`apiFetch` in `frontend/src/api/client.ts`), which collapses plan
+option A to a single prefix point plus the three SSE consumers. The proxy is
+dropped entirely — **all** traffic connects directly to
+`http://127.0.0.1:<dynamic port>`, injected before any application script
+runs as `window.__AGENTCANVAS_BACKEND_ORIGIN__` (web/dev stay on relative
+paths, so the helper is a no-op there). This removes the last buffering
+concern, keeps one cookie jar (the session cookie is set and sent against
+the sidecar origin; the backend CORS already runs `allow_credentials=True`
+with an explicit origin list), and leaves the shell with no request-handling
+surface at all. Desktop mode never emits HSTS, and `connect-src` for the
+direct loopback target must be added to the page CSP when the C8 default CSP
+is enabled for the desktop origin.
 
 ### 3. PTY belongs to Rust, not to the backend
 

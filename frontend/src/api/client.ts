@@ -1,4 +1,7 @@
-/** Thin fetch wrapper that talks to the Vite-proxied backend. */
+/** Thin fetch wrapper that talks to the Vite-proxied (web) or injected
+ * desktop-sidecar backend (C9 §3.2: one central prefix point). */
+
+import { backendUrl } from "@/api/backendOrigin";
 
 export class ApiError extends Error {
   status: number;
@@ -23,7 +26,7 @@ function canRefresh(path: string): boolean {
 }
 
 async function performRefresh(): Promise<boolean> {
-  return fetch("/api/auth/refresh", {
+  return fetch(backendUrl("/api/auth/refresh"), {
     method: "POST",
     credentials: "include",
     headers: { Accept: "application/json" },
@@ -33,7 +36,7 @@ async function performRefresh(): Promise<boolean> {
 }
 
 async function sessionAlreadyRefreshed(): Promise<boolean> {
-  return fetch("/api/auth/me", {
+  return fetch(backendUrl("/api/auth/me"), {
     credentials: "include",
     headers: { Accept: "application/json" },
   })
@@ -88,13 +91,19 @@ export async function apiFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
+  // Desktop mode re-points every call at the injected sidecar origin; the
+  // pathname+search of a Request input is re-prefixed so no caller can leak a
+  // page-origin URL past this wrapper.
   const requestUrl =
     input instanceof Request
-      ? input.url
-      : new URL(String(input), window.location.origin).toString();
+      ? backendUrl(`${new URL(input.url).pathname}${new URL(input.url).search}`)
+      : backendUrl(String(input));
   const path = new URL(requestUrl).pathname;
   const requestGeneration = sessionGeneration;
-  const request = new Request(input instanceof Request ? input : requestUrl, {
+  const request = new Request(requestUrl, {
+    ...(input instanceof Request
+      ? { method: input.method, headers: input.headers, body: input.body ?? undefined }
+      : init),
     ...init,
     credentials: "include",
   });

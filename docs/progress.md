@@ -523,3 +523,11 @@ pnpm dev
 - 壳侧:`splash.html` 经 `include_str!` 内嵌二进制,由自定义 `splash` 协议伺服(不依赖后端与前端资产);Tauri 事件驱动(`splash:progress` 流式渲染 readyz 分项检查、`splash:ready` 后关 splash 开主窗、`splash:failure` 展示错误 + 日志路径 + 复制诊断按钮)。**失败时不再打开主窗**——splash 即失败面,避免用户看到连不上后端的死 UI。`withGlobalTauri` + capabilities 覆盖 `main`/`splash` 两窗。
 - 本地验证注意:GNU 工具链下跑测试需 `WebView2Loader.dll` 在 `target/debug/deps`(从 webview2-com-sys registry 源复制);CI windows-latest 的 MSVC 无此步骤。
 - C9-1 剩余:安装包 NSIS 构建 + 体积门进 CI、干净机人工验收清单、桌面 OIDC 深链接与 embed 取舍(§13.5)。
+
+## 2026-09-12 C9-1 片 4:B' 运输层落地——全流量直连,代理取消
+
+- **关键发现**:C9 §3.2 的 B' 原设计保留「REST 走协议代理」,但实现期审计确认前端 REST **全部集中在 `apiFetch` 一个包装器**(`frontend/src/api/client.ts`),方案 A 的成本被计划高估——origin 前缀只需一处 + helper。最终**取消代理**:REST 与三处 SSE 全部直连 `http://127.0.0.1:<动态端口>`,壳不再有任何请求转发面,缓冲问题彻底消失。
+- 前端:新增 `src/api/backendOrigin.ts`(`window.__AGENTCANVAS_BACKEND_ORIGIN__`,web/dev 未注入时为空、helper 即 no-op);`apiFetch` 归一化前缀(Request 入参取 pathname+search 重前缀,防泄漏页面 origin);auth refresh/me、`ResilientSSE`/multi-SSE、collaboration SSE 与 keepalive ping、`app_runtime.ts` 五个公开运行时 fetch 共约 12 处接线。
+- 壳侧:主窗 `initialization_script` 在应用脚本前注入 origin(仅打包形态;`tauri dev` 保持 Vite proxy 相对路径)。
+- 依据:后端 CORS 本就 `allow_credentials=True` + 显式 origin 列表,desktop profile 已追加两个 Tauri origin——登录 Set-Cookie 与后续请求同源指向 sidecar origin,cookie 罐一致。
+- 门禁:前端 typecheck ×2、build(bundle 108.58 KiB < 120)、Rust test 9/9 + clippy -D warnings 全绿。ADR 0003 与 C9 计划 §3.2/§5.2 同步修订(代理取消、直连定型)。
