@@ -4,7 +4,7 @@
 > 视觉与交互的单一事实源仍是 `design-system/MASTER.md`。本阶段对两者的增补以本文
 > 「12. 文档同步」列出的方式回写,不在此文档内另立事实源。
 
-- 状态:计划待批准
+- 状态:C9-1 实施中(2026-09-12 起;Spike 已完成并定案 B')
 - 日期:2026-08-25
 - 前置:C0–C8 已完成(C5 UI/UX 产品化 C5-1…C5-11 全量关闭、C6 性能与规模五项性能门达成、C8 安全头与 CSP 落地)
 - 来源:`docs/commercial-roadmap-2026-08-11.md` 第 5 节 Backlog「桌面端打包(Tauri,SQLite 单机模式复用)」(原估 5-8 人日,需求驱动)
@@ -370,7 +370,7 @@ C8 落地了站点级安全头与 HSTS。桌面下:
 | `desktop-build-linux` | `ubuntu-latest` | `.deb` / `.AppImage` |
 | `desktop-e2e-windows` | `windows-latest` | CDP 通道 e2e 子集结果 |
 
-**成本提示**:Windows/macOS runner 分钟数计费倍率高(macOS 通常 10x),且 Rust 编译 + PyInstaller 打包耗时长。建议:桌面 job 只在 tag 与手动触发时跑全量,PR 上只跑 `cargo check` + `cargo clippy` + `cargo test`(Linux 即可)。
+**成本提示**:Windows/macOS runner 分钟数计费倍率高(macOS 通常 10x),且 Rust 编译 + PyInstaller 打包耗时长。建议:桌面 job 只在 tag 与手动触发时跑全量,PR 上只跑 `cargo check` + `cargo clippy` + `cargo test`(Linux 即可)。**修订(2026-09-12)**:PR 检查改在 `windows-latest` 而非 Linux——`frontend/src-tauri/rust-toolchain.toml` 钉住 MSVC 工具链(见 ADR 0003),WebView2 胶水层也是 Windows 专属;runner 预装 VS 使 MSVC 零配置可用。Linux 上的 GNU 交叉路径(windres/ld 序号/加载入口点)不值得维护。
 
 ### 9.2 发布把关延续现有严格度
 

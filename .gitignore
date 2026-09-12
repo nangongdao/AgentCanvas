@@ -8,6 +8,8 @@ __pycache__/
 .pytest_cache/
 backend/data/
 backend/data.pre-restore-*/
+backend/desktop/build/
+backend/desktop/dist/
 htmlcov/
 .coverage
 backend/.coverage*
@@ -20,6 +22,8 @@ node_modules/
 frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
 *.local
 
 # --- Secrets & env ---

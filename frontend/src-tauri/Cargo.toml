@@ -1,0 +1,33 @@
+[package]
+name = "agentcanvas-desktop"
+version = "1.0.0"
+description = "AgentCanvas desktop shell"
+edition = "2021"
+rust-version = "1.77"
+
+[workspace]
+members = [".", "crates/supervisor"]
+
+[lib]
+name = "agentcanvas_desktop_lib"
+# Desktop-only shell: rlib is sufficient. cdylib/staticlib exist for Tauri's
+# mobile hosts, and the mingw linker cannot export the windows crate's symbol
+# surface as a DLL anyway ("export ordinal too large").
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = [] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+agentcanvas-desktop-supervisor = { path = "crates/supervisor" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

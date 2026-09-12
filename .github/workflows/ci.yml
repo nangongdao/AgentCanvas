@@ -120,6 +120,53 @@ jobs:
             frontend/test-results
           if-no-files-found: ignore
 
+  desktop-shell:
+    # C9 §9.1: PRs run only the Rust checks for the desktop shell; the full
+    # installer builds stay on tag/manual triggers. Windows (not Linux)
+    # because the shell pins the MSVC toolchain via rust-toolchain.toml and
+    # the WebView2 glue is Windows-specific; the runner's preinstalled VS
+    # makes MSVC work with no extra setup.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.6.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      - name: Build frontend dist embedded by the shell
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Cargo check
+        working-directory: frontend/src-tauri
+        run: cargo check --workspace --all-targets
+
+      - name: Cargo clippy
+        working-directory: frontend/src-tauri
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Cargo test
+        working-directory: frontend/src-tauri
+        run: cargo test --workspace
+
   postgresql-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 15

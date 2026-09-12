@@ -1,0 +1,17 @@
+[package]
+name = "agentcanvas-desktop-supervisor"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.77"
+
+[dependencies]
+# The supervisor only probes loopback HTTP; no TLS features needed. The
+# supervisor runs on a dedicated std thread, so the blocking client is safe.
+reqwest = { version = "0.12", default-features = false, features = ["blocking"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60", features = [
+  "Win32_Foundation",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }

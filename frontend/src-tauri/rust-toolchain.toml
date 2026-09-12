@@ -1,0 +1,7 @@
+# The desktop shell builds on the MSVC toolchain: Tauri's Windows support
+# (WebView2 loader linking, tauri-winres resource embedding) targets MSVC, and
+# the GNU toolchain chain of windres/ld/entrypoint quirks is not worth
+# fighting. Pin it per-directory so local `cargo` invocations and CI agree
+# regardless of the developer's global default.
+[toolchain]
+channel = "stable-x86_64-pc-windows-msvc"
