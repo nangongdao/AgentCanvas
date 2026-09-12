@@ -7,6 +7,59 @@
   before first paint by an inline script in index.html (reads localStorage
   `agentcanvas:theme` and `prefers-color-scheme`), so there is no flash.
 */
+
+/* C9 §7.2 — self-hosted faces. The Noto Sans SC file is a variable subset
+   (wght 100–900, charset: GB2312 level-1 + every character the app ships)
+   produced with pyftsubset; regenerating it requires the same charset sweep
+   or new strings will silently fall back to system fonts. */
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/noto-sans-sc-subset.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-300-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-400-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2");
+}
+
 :root {
   /* Surface ladder: void (canvas) -> ink (surface) -> raise (inset, hovered
      rows, inputs, tiles). Depth is expressed by stepping through these three,
@@ -166,6 +219,10 @@
     Noto Sans SC is a variable font (weight 100-900). Because it ships complete
     CJK and Latin glyph sets, `font-sans` can be one family with no
     script-specific fallback stack. Registering it as `--font-sans` also
+
+Self-hosted (C9 §7.2): the Noto Sans SC variable subset and the JetBrains
+Mono latin faces ship from `public/fonts` (OFL); no CDN request participates
+in first paint.
     redirects Tailwind's preflight default, so anything without an explicit
     family inherits it instead of the system stack.
   */

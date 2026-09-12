@@ -539,3 +539,10 @@ pnpm dev
 - **体积门脚本**(`src-tauri/scripts/check-installer-size.mjs`,§7.3:目标 <300 MiB、上限 <450 MiB):合成夹具三分支实测——500 MiB 拒绝(exit 1)、350 MiB 警告通过、100 MiB 通过。自测抓到并修复一个真 bug:flag 缺省时 `indexOf+1` 取到目录路径产生 NaN,NaN 比较恒 false 导致超额不拦截。
 - **本机约束(如实记录)**:本地 release 构建在 `windows` crate codegen 阶段 OOM fast-fail(0xc0000409)——机器常驻内存负载 81-84%,`windows` crate 的 codegen 峰值超出剩余物理+页面文件(实测 -j 1/-j 2 均崩)。安装包生产由此**归属 CI**(GH runner 16GB 干净环境 + MSVC);本机可验证的链路段(前端 dist、PyInstaller onedir、cargo test、体积门)全部就绪。若需本地出包,先释放内存至 ~8GB 可用再跑 `pnpm dlx @tauri-apps/cli build --config src-tauri/tauri.installer.conf.json`。
 - C9-1 剩余:干净机人工验收清单(等 CI 产出安装包)、桌面 OIDC 深链接与 embed 取舍(§13.5)。
+
+## 2026-09-12 C9-1 片 6:字体自托管(C9 §2.3/§7.2 必修项)+ 文档收尾
+
+- **字体自托管**:移除 Google Fonts CDN(preconnect ×2 + stylesheet),改为 `public/fonts/` 自托管——Noto Sans SC **变量字体子集** 1.03 MiB(wght 100-900 保留,pyftsubset 按「应用全量字符扫描 ∪ GB2312 一级常用字 ∪ CJK 标点/箭头/几何符号」共 4155 字符生成,cmap 覆盖 3999/4155,缺失项全为零宽/生僻标点、系统字体无害兜底)+ JetBrains Mono latin 5 个静态 woff2(300/400/500/700/400i,各 ~22KB)。index.css 增 6 个 @font-face(font-display: swap),index.html 预加载两个主字体并删除全部第三方引用。OFW 许可文本随目录分发。**验收**:dist/fonts 产物齐全、dist 中 `fonts.googleapis` 引用为零、bundle 预算不变(108.58 KiB)、theme/language e2e 3/3。修一个自伤 bug:apiFetch 重写时丢了 `new URL` 的 base,相对路径解析抛 TypeError 断开 401→登录对话框事件流——已恢复 base 并回归。
+- 期间回归发现:theme/language 组合运行曾 1 例超时,单独复跑与组合复跑均通过(抖动类,与前两例同类)。
+- **文档收尾**:C9 计划 §13.5 决策(桌面保留 embed 代码片段生成、壳内预览与 `app-embed.spec` 桌面通道排除);新增「14. 干净机人工验收清单」(10 项,CI 安装包产出后执行即关闭 C9-1);operations-runbook 新增 §9 桌面故障排查(readyz 分项定位、sidecar 日志路径、数据目录与重置语义、端口/单实例、字体离线)。
+- C9-1 状态:代码与文档全部就绪,仅余「CI 安装包产出 → 干净机验收清单执行」这一外部依赖步骤。

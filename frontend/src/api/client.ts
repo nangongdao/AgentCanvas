@@ -98,7 +98,7 @@ export async function apiFetch(
     input instanceof Request
       ? backendUrl(`${new URL(input.url).pathname}${new URL(input.url).search}`)
       : backendUrl(String(input));
-  const path = new URL(requestUrl).pathname;
+  const path = new URL(requestUrl, window.location.origin).pathname;
   const requestGeneration = sessionGeneration;
   const request = new Request(requestUrl, {
     ...(input instanceof Request
