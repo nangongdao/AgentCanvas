@@ -107,6 +107,7 @@ def build_supervisor_fn(
             required_capabilities=required_agent_capabilities(cfg),
             params=cfg.params,
             node_id=node.id,
+            load_balance=cfg.load_balance,
         )
         decision = parse_decision(result.content, workers)
         goto = finish_target if decision["next"] == "FINISH" else decision["next"]

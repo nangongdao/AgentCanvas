@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Mapping, Sequence
@@ -26,7 +28,7 @@ from app.core.resilience import (
 from app.engine.events import EventEmitter
 from app.engine.state import WorkflowState
 from app.providers.base import BaseChatProvider, ChatMessage, ChatResult, StreamChunk, ToolSchema
-from app.schemas.dsl import NodeSpec, NodeType
+from app.schemas.dsl import LoadBalanceStrategy, NodeSpec, NodeType
 from app.schemas.events import EventType
 from app.services.execution_inspection import (
     bounded_error,
@@ -58,6 +60,27 @@ def _provider_model(provider: BaseChatProvider) -> str:
 
 def _provider_resilience_key(provider: BaseChatProvider) -> str:
     return f"provider:{_provider_label(provider)}:{_provider_model(provider)}"
+
+
+# Process-wide round-robin cursor shared by every ``round_robin`` chain call so
+# concurrent executions in this process spread across the model chain. The
+# counter is per process on purpose: multi-worker deployments each rotate their
+# own cursor, matching the process-level limits documented for U3/I1.
+_ROUND_ROBIN_CURSOR = itertools.count()
+_round_robin_lock = threading.Lock()
+
+
+def _load_balanced_order(
+    providers: Sequence[BaseChatProvider],
+    load_balance: LoadBalanceStrategy,
+) -> Sequence[BaseChatProvider]:
+    """Rotate the chain start point per call when round-robin is requested."""
+    if load_balance != "round_robin" or len(providers) <= 1:
+        return providers
+    with _round_robin_lock:
+        start = next(_ROUND_ROBIN_CURSOR) % len(providers)
+    ordered = tuple(providers)
+    return (*ordered[start:], *ordered[:start])
 
 
 @dataclass(frozen=True)
@@ -193,18 +216,26 @@ class CompileContext:
         tools: Sequence[ToolSchema] = (),
         params: Mapping[str, Any] | None = None,
         node_id: str | None = None,
+        load_balance: LoadBalanceStrategy = "failover",
     ) -> ChatResult:
-        """Use the first healthy capable Provider in an ordered fallback chain."""
+        """Use the first healthy capable Provider in the configured model chain.
+
+        ``load_balance="failover"`` always starts at the first Provider.
+        ``load_balance="round_robin"`` rotates the start point per call so
+        consecutive requests spread across the chain; failures still walk the
+        remaining Providers in order.
+        """
         if not providers:
             raise ValueError("provider fallback chain cannot be empty")
-        for index, provider in enumerate(providers):
+        order = _load_balanced_order(providers, load_balance)
+        for index, provider in enumerate(order):
             try:
                 prepared = provider.prepare_params(required_capabilities, params)
                 return await self.model_chat(provider, messages, tools=tools, **prepared)
             except Exception as exc:
-                if index + 1 >= len(providers) or not self._can_fallback(exc):
+                if index + 1 >= len(order) or not self._can_fallback(exc):
                     raise
-                fallback = providers[index + 1]
+                fallback = order[index + 1]
                 await self._emit_provider_fallback(
                     provider,
                     fallback,
@@ -293,11 +324,18 @@ class CompileContext:
         required_capabilities: Collection[CapabilityName],
         params: Mapping[str, Any] | None = None,
         node_id: str | None = None,
+        load_balance: LoadBalanceStrategy = "failover",
     ) -> AsyncIterator[StreamChunk]:
-        """Fallback only before a Provider emits its first stream chunk."""
+        """Stream from the first healthy Provider; fall back before first chunk.
+
+        ``load_balance="round_robin"`` rotates the start point per call, matching
+        :meth:`model_chat_chain`. Once a Provider emits its first chunk the
+        stream is never switched.
+        """
         if not providers:
             raise ValueError("provider fallback chain cannot be empty")
-        for index, provider in enumerate(providers):
+        order = _load_balanced_order(providers, load_balance)
+        for index, provider in enumerate(order):
             emitted = False
             try:
                 prepared = provider.prepare_params(required_capabilities, params)
@@ -306,9 +344,9 @@ class CompileContext:
                     yield chunk
                 return
             except Exception as exc:
-                if emitted or index + 1 >= len(providers) or not self._can_fallback(exc):
+                if emitted or index + 1 >= len(order) or not self._can_fallback(exc):
                     raise
-                fallback = providers[index + 1]
+                fallback = order[index + 1]
                 await self._emit_provider_fallback(
                     provider,
                     fallback,

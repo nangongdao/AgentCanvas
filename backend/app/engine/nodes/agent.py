@@ -278,6 +278,7 @@ class AgentNodeExecutor(BaseNodeExecutor):
                 required_capabilities=required_capabilities,
                 params=output_params,
                 node_id=node.id,
+                load_balance=cfg.load_balance,
             ):
                 if chunk.type == "text" and chunk.text:
                     if first_token_ms is None:

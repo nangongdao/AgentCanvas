@@ -206,6 +206,22 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   before it reaches the operator. The endpoint is admin-gated, carries its own
   rate-limit budget, and records an audit event. The demo (mock) provider answers
   from a canned catalog, so discovery is demonstrable without an API key.
+- Explicit load-balance strategy for the Agent model chain (backlog): every
+  Agent, tool-loop, and supervisor call now walks its model chain through the
+  new `AgentConfig.load_balance` field. `failover` (the default) keeps the
+  existing semantics — the chain is a strict preference order and the backups
+  only serve after a transient failure, circuit-open, or exhausted retry budget
+  on the entry ahead of them. `round_robin` treats the same chain as a
+  distribution pool: each call rotates the start point through a process-wide
+  cursor, so consecutive executions spread their requests (and their spend)
+  across every configured model instead of hammering the first one; a failure
+  still walks the remaining entries in order and emits the same
+  `provider_fallback` event, and a stream that has already produced its first
+  chunk is never switched. The rotation is deliberately per process, matching
+  the process-level model-call limits that already govern Provider traffic in
+  multi-worker deployments. The editor renders the strategy as a select on the
+  Agent node, and the field flows to `/api/node-types` and the copilot prompt
+  from the same schema, so no contract change accompanied it.
 - Usage export and billing reconciliation on the cost surface (C7-1). The
   platform-wide metering hand-off and the month digest were API-only; the cost
   governance page now exports raw `usage_daily_facts` for a window as CSV or

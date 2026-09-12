@@ -101,9 +101,19 @@ class AgentRequirements(BaseModel):
     cost: bool = False
 
 
+LoadBalanceStrategy = Literal["failover", "round_robin"]
+
+
 class AgentConfig(BaseModel):
     model_config_id: str = Field(default="default", min_length=1, max_length=64)
     fallback_model_config_ids: list[str] = Field(default_factory=list, max_length=5)
+    load_balance: LoadBalanceStrategy = Field(
+        default="failover",
+        description=(
+            "failover: 始终优先首选模型,其余仅作故障转移;"
+            "round_robin: 按调用轮转起点,把请求分散到整条模型链,失败仍按序转移"
+        ),
+    )
     agent_mode: Literal["simple", "react", "supervisor"] = "simple"
     system_prompt: str = "你是一个有帮助的助手。"
     user_prompt: str = "{{input.user_query}}"

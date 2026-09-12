@@ -176,6 +176,7 @@ function defaultConfig(type: NodeType): Record<string, unknown> {
       return {
         model_config_id: "default",
         agent_mode: "simple",
+        load_balance: "failover",
         system_prompt: "你是一个有帮助的助手。",
         user_prompt: "{{input.user_query}}",
         tools: [],
