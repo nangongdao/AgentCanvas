@@ -264,6 +264,14 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
 
 ### Fixed
 
+- The evaluations workspace is reachable again through the end-to-end gate.
+  The C5-1 shell redesign introduced a persistent global navigation landmark,
+  so `page.getByRole("complementary").first()` in the two evaluation
+  end-to-end paths resolved to the platform sidebar instead of the page's own
+  dataset list, and both tests had been timing out since. The dataset and
+  report panels now carry accessible names (`数据集列表` / `评测报告列表`),
+  which is the accessibility-correct fix, and the tests target the named
+  landmark instead of DOM order.
 - `Base.metadata.create_all` no longer fails on SQLite. The ORM declaration of
   the PostgreSQL-only GIN expression index `ix_document_chunks_text_tsv`
   (`to_tsvector('simple', text)`, added for autogenerate parity) was not
