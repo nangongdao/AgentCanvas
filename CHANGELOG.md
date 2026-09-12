@@ -264,6 +264,16 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
 
 ### Fixed
 
+- Application embeds load again in real browsers. The C8-3 security-headers
+  middleware stamps every response with `Cross-Origin-Resource-Policy:
+  same-origin`, and the floating-bubble bootstrap endpoint (which predates it)
+  did not override that default — so when an external host page followed the
+  embed snippet, the browser refused the script with
+  `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` and no bubble ever mounted. The
+  endpoint now declares `Cross-Origin-Resource-Policy: cross-origin`, which is
+  the whole point of the endpoint: serving that script to external pages is
+  its job, while the allow-list still governs which origins may frame the
+  runtime and the 403/404 gating still governs who gets the script at all.
 - The evaluations workspace is reachable again through the end-to-end gate.
   The C5-1 shell redesign introduced a persistent global navigation landmark,
   so `page.getByRole("complementary").first()` in the two evaluation

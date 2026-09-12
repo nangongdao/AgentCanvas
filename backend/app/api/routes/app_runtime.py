@@ -474,6 +474,10 @@ async def embed_script(slug: str, session: SessionDep) -> Response:
         raise HTTPException(status_code=403, detail="embedding is disabled for this app")
     # The body is static, but the 200/403/404 decision follows live app
     # config; no-store keeps disable/rotate actions effective immediately.
+    # CORP is declared cross-origin on purpose: the bootstrap is meant to be
+    # loaded by allow-listed external host pages, and the C8-3 middleware's
+    # same-origin default would otherwise make browsers block the request
+    # (ERR_BLOCKED_BY_RESPONSE) — which silently broke embeds.
     return Response(
         content=_EMBED_SCRIPT,
         media_type="text/javascript",
@@ -481,6 +485,7 @@ async def embed_script(slug: str, session: SessionDep) -> Response:
             "Referrer-Policy": "no-referrer",
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "no-store",
+            "Cross-Origin-Resource-Policy": "cross-origin",
         },
     )
 
