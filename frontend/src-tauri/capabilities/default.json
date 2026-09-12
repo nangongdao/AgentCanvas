@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability for the AgentCanvas shell. The UI talks to the sidecar over HTTP, so the shell itself needs no plugin permissions yet.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "description": "Default capability for the AgentCanvas shell. The UI talks to the sidecar over HTTP; the splash only listens for progress events.",
+  "windows": [
+    "main",
+    "splash"
+  ],
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
 }

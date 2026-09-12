@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>AgentCanvas</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --void: #0b1220;
+        --ink: #101828;
+        --line: rgba(148, 163, 184, 0.28);
+        --ice: #e2e8f0;
+        --ghost: #94a3b8;
+        --pulse: #22d3ee;
+        --ok: #34d399;
+        --bad: #f87171;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(120% 120% at 20% 0%, #101a2e 0%, var(--void) 55%);
+        color: var(--ice);
+        font-family: "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        user-select: text;
+      }
+      .panel { width: 100%; max-width: 400px; padding: 28px 30px; }
+      .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+      .dot {
+        width: 12px; height: 12px; border-radius: 50%;
+        background: var(--pulse);
+        box-shadow: 0 0 12px rgba(34, 211, 238, 0.7);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      .dot.done { background: var(--ok); animation: none; box-shadow: none; }
+      .dot.failed { background: var(--bad); animation: none; box-shadow: none; }
+      @keyframes pulse { 50% { opacity: 0.35; } }
+      h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+      .phase { color: var(--ghost); margin: 0 0 14px; }
+      ul.checks { list-style: none; margin: 0 0 14px; padding: 0; }
+      li {
+        display: flex; justify-content: space-between; gap: 12px;
+        padding: 5px 0; border-bottom: 1px solid var(--line);
+        font-variant-numeric: tabular-nums;
+      }
+      li span:last-child { color: var(--ghost); }
+      li[data-state="ready"] span:last-child { color: var(--ok); }
+      li[data-state]:not([data-state="ready"]) span:last-child { color: var(--warn, #fbbf24); }
+      .failure { display: none; margin-top: 4px; }
+      .failure .error {
+        color: var(--bad);
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0 0 10px;
+      }
+      .failure .log-path {
+        font-family: Consolas, monospace;
+        font-size: 11px;
+        color: var(--ghost);
+        background: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        word-break: break-all;
+        margin: 0 0 10px;
+      }
+      button {
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ice);
+        cursor: pointer;
+        font: inherit;
+        padding: 5px 14px;
+      }
+      button:hover { border-color: var(--pulse); color: var(--pulse); }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <div class="brand">
+        <span class="dot" id="dot"></span>
+        <h1>AgentCanvas</h1>
+      </div>
+      <p class="phase" id="phase">正在启动运行时…</p>
+      <ul class="checks" id="checks"></ul>
+      <section class="failure" id="failure">
+        <p class="error" id="error"></p>
+        <p class="log-path hidden" id="log-path"></p>
+        <button id="copy">复制诊断信息</button>
+      </section>
+    </main>
+    <script>
+      // The shell streams progress over Tauri events; this page only renders.
+      const phaseEl = document.getElementById("phase");
+      const checksEl = document.getElementById("checks");
+      const dotEl = document.getElementById("dot");
+      const failureEl = document.getElementById("failure");
+      const errorEl = document.getElementById("error");
+      const logPathEl = document.getElementById("log-path");
+      const copyBtn = document.getElementById("copy");
+      let lastDiagnostics = "";
+
+      function renderChecks(checks) {
+        checksEl.textContent = "";
+        for (const [name, state] of checks) {
+          const row = document.createElement("li");
+          row.dataset.state = state;
+          const label = document.createElement("span");
+          label.textContent = name;
+          const value = document.createElement("span");
+          value.textContent = state;
+          row.append(label, value);
+          checksEl.appendChild(row);
+        }
+      }
+
+      function showFailure(payload) {
+        dotEl.className = "dot failed";
+        phaseEl.textContent = "启动失败";
+        failureEl.classList.remove("hidden");
+        const logLine = payload.logPath ? "\n日志文件: " + payload.logPath : "";
+        errorEl.textContent = payload.error || "未知错误";
+        if (payload.logPath) {
+          logPathEl.textContent = payload.logPath;
+          logPathEl.classList.remove("hidden");
+        }
+        lastDiagnostics = (payload.error || "未知错误") + logLine;
+        copyBtn.textContent = "复制诊断信息";
+      }
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(lastDiagnostics);
+          copyBtn.textContent = "已复制";
+        } catch {
+          copyBtn.textContent = "无法复制,请手动选择文本";
+        }
+        setTimeout(() => { copyBtn.textContent = "复制诊断信息"; }, 2000);
+      });
+
+      const listen = window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen;
+      if (!listen) {
+        // The splash must never depend on the backend; without the event bridge
+        // it simply stays on "starting".
+        phaseEl.textContent = "正在启动运行时…";
+      } else {
+        listen("splash:progress", (event) => {
+          const payload = event.payload || {};
+          if (payload.phase === "runtime-started") {
+            phaseEl.textContent = "运行时已启动,等待就绪检查…";
+            return;
+          }
+          if (Array.isArray(payload.checks)) {
+            phaseEl.textContent = payload.status === "ready"
+              ? "就绪检查全部通过"
+              : "就绪检查进行中…";
+            renderChecks(payload.checks);
+          }
+        });
+        listen("splash:ready", () => {
+          dotEl.className = "dot done";
+          phaseEl.textContent = "已就绪,正在打开工作台…";
+        });
+        listen("splash:failure", (event) => showFailure(event.payload || {}));
+      }
+    </script>
+  </body>
+</html>

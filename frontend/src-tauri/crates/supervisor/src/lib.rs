@@ -9,7 +9,7 @@ mod job;
 
 use std::io;
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
@@ -23,31 +23,25 @@ pub struct SidecarSpec {
 
 /// A spawned sidecar plus the Windows job object that guarantees it dies with
 /// the shell. Dropping the guard terminates the child, so every exit path —
-/// normal quit, panic, or crash — reaps the backend. The child is an
-/// `Option` so a consuming read (`wait_with_output`) can take it without
-/// moving out of a `Drop` type.
+/// normal quit, panic, or crash — reaps the backend.
 pub struct SidecarHandle {
     child: Option<Child>,
     _job: Option<crate::job::JobGuard>,
+    /// File the sidecar's stdout/stderr stream into (`<data>/logs/sidecar.log`);
+    /// the failure surface points the operator here.
+    pub log_path: PathBuf,
 }
 
 impl SidecarHandle {
-    /// Process id, used by the startup window to attribute logs (next slice).
+    /// Process id, used by the startup window to attribute logs.
     #[allow(dead_code)]
     pub fn id(&self) -> u32 {
         self.child.as_ref().expect("sidecar child").id()
     }
 
-    /// Consume the handle and wait for the child to exit, returning its
-    /// captured output. Test-only surface for `cmd /c` probes.
-    #[cfg(test)]
-    pub fn wait_with_output(mut self) -> io::Result<std::process::Output> {
-        let child = self.child.take().expect("sidecar child");
-        let output = child.wait_with_output()?;
-        // The child has exited; dropping the handle now only closes the job
-        // guard, which is a no-op for an exited process.
-        drop(self);
-        Ok(output)
+    /// Poll whether the child has exited without blocking.
+    pub fn try_wait(&mut self) -> io::Result<Option<std::process::ExitStatus>> {
+        self.child.as_mut().expect("sidecar child").try_wait()
     }
 }
 
@@ -74,54 +68,126 @@ pub fn pick_free_port() -> io::Result<u16> {
     Ok(port)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Readiness {
-    Ready,
-    NotReady,
+/// Where the sidecar's output streams land for a given data directory.
+pub fn sidecar_log_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("logs").join("sidecar.log")
 }
 
-/// One readiness probe against `/readyz`. A connection refusal or a 5xx keeps
-/// the loop alive: the sidecar may still be importing heavy modules.
-pub fn probe_once(base_url: &str) -> Readiness {
+/// One `/readyz` observation, reduced to what the startup window renders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadyzSnapshot {
+    /// `"ready"` once every blocking check passes, else `"unavailable"`.
+    pub status: String,
+    /// Check name → state (e.g. `("migrations", "ready")`), in report order.
+    pub checks: Vec<(String, String)>,
+}
+
+impl ReadyzSnapshot {
+    fn from_body(body: &serde_json::Value) -> Option<Self> {
+        let status = body.get("status")?.as_str()?.to_string();
+        let mut checks = Vec::new();
+        if let Some(map) = body.get("checks").and_then(|c| c.as_object()) {
+            for (name, value) in map {
+                if let Some(state) = value.get("state").and_then(|s| s.as_str()) {
+                    checks.push((name.clone(), state.to_string()));
+                }
+            }
+        }
+        Some(Self { status, checks })
+    }
+}
+
+/// Why the sidecar is not serving. `ChildExited` fails fast instead of
+/// polling a process that is already gone (e.g. a migration failure).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartupFailure {
+    Timeout { base_url: String, last: Option<ReadyzSnapshot> },
+    ChildExited { code: Option<i32> },
+}
+
+impl std::fmt::Display for StartupFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StartupFailure::Timeout { base_url, last } => {
+                write!(f, "backend at {base_url} did not become ready in time")?;
+                if let Some(snapshot) = last {
+                    write!(f, "; last status: {}", snapshot.status)?;
+                }
+                Ok(())
+            }
+            StartupFailure::ChildExited { code } => {
+                write!(f, "backend process exited early (code {})", code.unwrap_or(-1))
+            }
+        }
+    }
+}
+
+/// One `/readyz` probe: `Some(snapshot)` on any HTTP response (200 or 503 —
+/// the body carries the per-check report either way), `None` when the
+/// backend is not accepting connections yet.
+pub fn probe_once(base_url: &str) -> Option<ReadyzSnapshot> {
     let probe_url = format!("{base_url}/readyz");
     let outcome = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(2))
         .build()
-        .and_then(|client| {
-            client
-                .get(&probe_url)
-                .send()
-                .and_then(|response| response.error_for_status())
-        });
+        .and_then(|client| client.get(&probe_url).send());
     match outcome {
-        Ok(_) => Readiness::Ready,
-        Err(_) => Readiness::NotReady,
+        Ok(response) => response
+            .json::<serde_json::Value>()
+            .ok()
+            .as_ref()
+            .and_then(ReadyzSnapshot::from_body),
+        Err(_) => None,
     }
 }
 
-/// Poll `/readyz` until it returns 200 or the deadline expires. This is the
-/// Rust-side mirror of the C9 plan §5.3: the backend's `/readyz` already
-/// checks database, migrations, checkpointer, config, vector store, and the
-/// sandbox, and the response body's per-check detail is what the startup
-/// window will render once the splash slice lands.
-pub fn wait_until_ready(base_url: &str, timeout: Duration) -> Result<(), String> {
+/// Poll `/readyz` until every blocking check passes, the deadline expires, or
+/// the child exits early. This is the Rust-side mirror of the C9 plan §5.3:
+/// the backend's `/readyz` already reports database, migrations, checkpointer,
+/// config, vector store, and sandbox, and the snapshot stream is what the
+/// startup window renders. `on_progress` fires once per successful probe;
+/// `child_running` should report `false` once the sidecar process is gone so
+/// a migration failure fails fast instead of polling a dead process.
+pub fn wait_until_ready_with_progress(
+    base_url: &str,
+    timeout: Duration,
+    mut on_progress: impl FnMut(ReadyzSnapshot),
+    mut child_running: impl FnMut() -> bool,
+) -> Result<ReadyzSnapshot, StartupFailure> {
     let deadline = Instant::now() + timeout;
+    let mut last = None;
     loop {
-        if probe_once(base_url) == Readiness::Ready {
-            return Ok(());
+        if let Some(snapshot) = probe_once(base_url) {
+            if snapshot.status == "ready" {
+                return Ok(snapshot);
+            }
+            on_progress(snapshot.clone());
+            last = Some(snapshot);
+        }
+        if !child_running() {
+            return Err(StartupFailure::ChildExited { code: None });
         }
         if Instant::now() >= deadline {
-            return Err(format!(
-                "backend at {base_url} did not become ready within {timeout:?}"
-            ));
+            return Err(StartupFailure::Timeout {
+                base_url: base_url.to_string(),
+                last,
+            });
         }
         std::thread::sleep(Duration::from_millis(250));
     }
 }
 
+/// Blocking convenience wrapper for callers that have no child to monitor.
+pub fn wait_until_ready(
+    base_url: &str,
+    timeout: Duration,
+) -> Result<ReadyzSnapshot, StartupFailure> {
+    wait_until_ready_with_progress(base_url, timeout, |_| {}, || true)
+}
+
 /// Spawn the sidecar with the desktop profile env. The caller receives a
 /// handle whose drop kills the process tree.
-pub fn spawn_sidecar(spec: &SidecarSpec, port: u16, data_dir: &PathBuf) -> io::Result<SidecarHandle> {
+pub fn spawn_sidecar(spec: &SidecarSpec, port: u16, data_dir: &Path) -> io::Result<SidecarHandle> {
     spawn_command(&spec.program, &spec.working_dir, port, data_dir, &[])
 }
 
@@ -129,12 +195,21 @@ pub fn spawn_sidecar(spec: &SidecarSpec, port: u16, data_dir: &PathBuf) -> io::R
 /// by tests (which drive `cmd /c ...` to observe the injected environment and
 /// the kill-on-drop guarantee).
 pub fn spawn_command(
-    program: &PathBuf,
-    working_dir: &PathBuf,
+    program: &Path,
+    working_dir: &Path,
     port: u16,
-    data_dir: &PathBuf,
+    data_dir: &Path,
     args: &[&str],
 ) -> io::Result<SidecarHandle> {
+    let log_path = sidecar_log_path(data_dir);
+    if let Some(parent) = log_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)?;
+    let stderr_file = log_file.try_clone()?;
     let mut command = std::process::Command::new(program);
     command
         .current_dir(working_dir)
@@ -144,8 +219,8 @@ pub fn spawn_command(
         .env("APP_PORT", port.to_string())
         .env("APP_DATA_DIR", data_dir)
         .env("STARTUP_MIGRATIONS", "true")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stdout(log_file)
+        .stderr(stderr_file);
     #[cfg(windows)]
     {
         // Prevent a detached console window from flashing on launch.
@@ -154,7 +229,11 @@ pub fn spawn_command(
     }
     let child = command.spawn()?;
     let job = crate::job::JobGuard::for_child(&child);
-    Ok(SidecarHandle { child: Some(child), _job: job })
+    Ok(SidecarHandle {
+        child: Some(child),
+        _job: job,
+        log_path,
+    })
 }
 
 /// Resolve the backend origin for this launch. `AGENTCANVAS_BACKEND_URL`
@@ -167,7 +246,9 @@ pub enum BackendOrigin {
 
 pub fn resolve_backend_origin(reuse: Option<&str>) -> io::Result<BackendOrigin> {
     match reuse {
-        Some(url) if !url.trim().is_empty() => Ok(BackendOrigin::Reused(url.trim().trim_end_matches('/').to_string())),
+        Some(url) if !url.trim().is_empty() => Ok(BackendOrigin::Reused(
+            url.trim().trim_end_matches('/').to_string(),
+        )),
         _ => Ok(BackendOrigin::Spawned { port: pick_free_port()? }),
     }
 }
@@ -178,8 +259,8 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
-    /// Minimal HTTP/1.1 server for one connection: replies 503 `times` and
-    /// 200 afterwards, recording the request paths.
+    /// Minimal HTTP/1.1 server for one connection: replies 503 `times` with a
+    /// checks-bearing body, then 200 with `"ready"`.
     struct FakeReadyz {
         port: u16,
         handle: Option<std::thread::JoinHandle<()>>,
@@ -194,10 +275,19 @@ mod tests {
                     let Ok((mut stream, _)) = listener.accept() else {
                         return;
                     };
-                    let mut buffer = [0u8; 1024];
+                    let mut buffer = [0u8; 2048];
                     let _ = stream.read(&mut buffer);
-                    let status = if index < failures_first { "503" } else { "200" };
-                    let body = if status == "200" { r#"{"status":"ok"}"# } else { r#"{"status":"degraded"}"# };
+                    let (status, body) = if index < failures_first {
+                        (
+                            "503",
+                            r#"{"status":"unavailable","checks":{"database":{"state":"starting"},"migrations":{"state":"starting"}}}"#,
+                        )
+                    } else {
+                        (
+                            "200",
+                            r#"{"status":"ready","checks":{"database":{"state":"ready"},"migrations":{"state":"ready"}}}"#,
+                        )
+                    };
                     let response = format!(
                         "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                         body.len()
@@ -240,7 +330,12 @@ mod tests {
     #[test]
     fn wait_until_ready_succeeds_after_transient_failures() {
         let server = FakeReadyz::start(2);
-        wait_until_ready(&server.url(), Duration::from_secs(10)).expect("ready");
+        let snapshot = wait_until_ready(&server.url(), Duration::from_secs(10)).expect("ready");
+        assert_eq!(snapshot.status, "ready");
+        assert!(snapshot
+            .checks
+            .iter()
+            .any(|(name, state)| name == "migrations" && state == "ready"));
     }
 
     #[test]
@@ -248,8 +343,38 @@ mod tests {
         let started = Instant::now();
         // Nothing listens on this port: every probe fails until the deadline.
         let result = wait_until_ready("http://127.0.0.1:1", Duration::from_millis(600));
-        assert!(result.is_err());
+        match result.expect_err("must time out") {
+            StartupFailure::Timeout { base_url, last } => {
+                assert_eq!(base_url, "http://127.0.0.1:1");
+                assert_eq!(last, None);
+            }
+            other => panic!("expected timeout, got {other:?}"),
+        }
         assert!(started.elapsed() >= Duration::from_millis(500));
+    }
+
+    #[test]
+    fn progress_callback_receives_check_snapshots() {
+        let server = FakeReadyz::start(1);
+        let seen: std::sync::Mutex<Vec<ReadyzSnapshot>> = std::sync::Mutex::new(Vec::new());
+        {
+            let seen = &seen;
+            let snapshot = wait_until_ready_with_progress(
+                &server.url(),
+                Duration::from_secs(10),
+                |snapshot| seen.lock().expect("lock").push(snapshot),
+                || true,
+            )
+            .expect("ready");
+            assert_eq!(snapshot.status, "ready");
+        }
+        let seen = seen.into_inner().expect("unlock");
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].status, "unavailable");
+        assert!(seen[0]
+            .checks
+            .iter()
+            .any(|(name, state)| name == "database" && state == "starting"));
     }
 
     #[test]
@@ -269,22 +394,40 @@ mod tests {
     }
 
     #[cfg(windows)]
+    fn wait_for_exit(handle: &mut SidecarHandle) -> std::process::ExitStatus {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(status) = handle.try_wait().expect("try_wait") {
+                return status;
+            }
+            assert!(Instant::now() < deadline, "child did not exit in time");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    #[cfg(windows)]
     #[test]
-    fn spawned_sidecar_receives_desktop_env() {
-        let tmp = std::env::temp_dir().join(format!("agentcanvas-sidecar-test-{}", std::process::id()));
+    fn spawned_sidecar_receives_desktop_env_and_logs_to_file() {
+        let tmp = std::env::temp_dir().join(format!(
+            "agentcanvas-sidecar-test-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&tmp).expect("tmp dir");
         let program = PathBuf::from("cmd");
         let port = pick_free_port().expect("port");
         // `cmd /c set APP_...` prints the matching environment entries.
-        let handle =
+        let mut handle =
             spawn_command(&program, &tmp, port, &tmp, &["/c", "set APP_"]).expect("spawn");
-        let output = handle.wait_with_output().expect("output");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("APP_PROFILE=desktop"), "stdout: {stdout}");
-        assert!(stdout.contains(&format!("APP_PORT={port}")), "stdout: {stdout}");
+        let expected_log = sidecar_log_path(&tmp);
+        assert_eq!(handle.log_path, expected_log);
+        let status = wait_for_exit(&mut handle);
+        assert!(status.success());
+        let logged = std::fs::read_to_string(&expected_log).expect("log file");
+        assert!(logged.contains("APP_PROFILE=desktop"), "log: {logged}");
+        assert!(logged.contains(&format!("APP_PORT={port}")), "log: {logged}");
         assert!(
-            stdout.contains(&format!("APP_DATA_DIR={}", tmp.display())),
-            "stdout: {stdout}"
+            logged.contains(&format!("APP_DATA_DIR={}", tmp.display())),
+            "log: {logged}"
         );
         std::fs::remove_dir_all(&tmp).ok();
     }
@@ -317,6 +460,35 @@ mod tests {
                 other => panic!("process {id} still alive after drop: {other:?}"),
             }
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn child_exit_fails_the_wait_fast() {
+        let tmp = std::env::temp_dir();
+        let program = PathBuf::from("cmd");
+        let port = pick_free_port().expect("port");
+        // The child exits immediately with a distinctive code; nothing ever
+        // listens on the port, so only the child-exit monitor can end the
+        // wait before the timeout.
+        let mut handle =
+            spawn_command(&program, &tmp, port, &tmp, &["/c", "exit 3"]).expect("spawn");
+        let started = Instant::now();
+        let result = wait_until_ready_with_progress(
+            "http://127.0.0.1:1",
+            Duration::from_secs(30),
+            |_| {},
+            || handle.try_wait().expect("try_wait").is_none(),
+        );
+        match result.expect_err("must fail fast") {
+            StartupFailure::ChildExited { .. } => {}
+            other => panic!("expected child exit, got {other:?}"),
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "fast fail took {:?}",
+            started.elapsed()
+        );
     }
 
     #[cfg(windows)]
