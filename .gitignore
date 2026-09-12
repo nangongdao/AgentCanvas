@@ -24,6 +24,7 @@ frontend/playwright-report/
 frontend/test-results/
 frontend/src-tauri/target/
 frontend/src-tauri/gen/
+frontend/src-tauri/resources/
 *.local
 
 # --- Secrets & env ---

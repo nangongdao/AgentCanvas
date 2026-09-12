@@ -77,10 +77,10 @@ fn start_backend_and_swap_windows(app: tauri::AppHandle) {
             .map_err(|failure| failure.to_string()),
         Ok(supervisor::BackendOrigin::Spawned { port }) => {
             let origin = format!("http://127.0.0.1:{port}");
+            let (program, working_dir) = resolve_sidecar_location(&app);
             let spec = supervisor::SidecarSpec {
-                program: default_sidecar_program(),
-                working_dir: std::env::current_dir()
-                    .unwrap_or_else(|_| PathBuf::from(".")),
+                program: program.clone(),
+                working_dir: working_dir.clone(),
             };
             match supervisor::spawn_sidecar(&spec, port, &default_data_dir()) {
                 Ok(mut handle) => {
@@ -147,9 +147,34 @@ fn start_backend_and_swap_windows(app: tauri::AppHandle) {
     std::mem::forget(sidecar);
 }
 
-fn default_sidecar_program() -> PathBuf {
-    PathBuf::from("sidecar/agentcanvas-backend/agentcanvas-backend.exe")
+/// Locate the packaged backend. The NSIS installer ships the PyInstaller
+/// onedir under the bundle resources (`<resource>/agentcanvas-backend/…`,
+/// built into `src-tauri/resources/` by the PyInstaller step); an unpacked
+/// `cargo run` falls back to the repo-side dist output, and
+/// `AGENTCANVAS_SIDECAR_DIR` overrides both.
+fn resolve_sidecar_location(app: &tauri::AppHandle) -> (PathBuf, PathBuf) {
+    if let Ok(dir) = std::env::var("AGENTCANVAS_SIDECAR_DIR") {
+        let dir = PathBuf::from(dir);
+        let exe_name = format!("{}-backend.exe{}", SIDECAR_STEM, std::env::consts::EXE_SUFFIX);
+        let program = dir.join("agentcanvas-backend").join(&exe_name);
+        return (program, dir);
+    }
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let exe_name = format!("{}-backend.exe{}", SIDECAR_STEM, std::env::consts::EXE_SUFFIX);
+        let program = resource_dir
+            .join("agentcanvas-backend")
+            .join(&exe_name);
+        if program.exists() {
+            return (program, resource_dir);
+        }
+    }
+    // Unbundled run (cargo run / tauri dev): last resort relative layout.
+    let exe_name = format!("{}-backend.exe{}", SIDECAR_STEM, std::env::consts::EXE_SUFFIX);
+    let dir = PathBuf::from("../../backend/desktop/dist");
+    (dir.join("agentcanvas-backend").join(&exe_name), dir)
 }
+
+const SIDECAR_STEM: &str = "agentcanvas";
 
 fn default_data_dir() -> PathBuf {
     // %APPDATA%/AgentCanvas on Windows; XDG-equivalent elsewhere. The backend

@@ -531,3 +531,11 @@ pnpm dev
 - 壳侧:主窗 `initialization_script` 在应用脚本前注入 origin(仅打包形态;`tauri dev` 保持 Vite proxy 相对路径)。
 - 依据:后端 CORS 本就 `allow_credentials=True` + 显式 origin 列表,desktop profile 已追加两个 Tauri origin——登录 Set-Cookie 与后续请求同源指向 sidecar origin,cookie 罐一致。
 - 门禁:前端 typecheck ×2、build(bundle 108.58 KiB < 120)、Rust test 9/9 + clippy -D warnings 全绿。ADR 0003 与 C9 计划 §3.2/§5.2 同步修订(代理取消、直连定型)。
+
+## 2026-09-12 C9-1 片 5:安装包链路、体积门与 CI job
+
+- **侧car资源接线**:`tauri.installer.conf.json` overlay 为安装包构建追加 `bundle.resources`(基础配置无资源——tauri-build 在编译期校验资源存在,拆分后普通 cargo build/test 不再依赖 PyInstaller 产物);壳侧 sidecar 路径改由 `resource_dir()` 解析(`<resource>/agentcanvas-backend/agentcanvas-backend.exe`),未打包运行回退仓库 dist,`AGENTCANVAS_SIDECAR_DIR` 可覆盖。cargo test 9/9 + clippy -D warnings 全绿。
+- **CI `desktop-build-windows`**(tag/manual 触发,windows-latest):前端 dist → PyInstaller onedir 进 `src-tauri/resources` → `tauri build --config tauri.installer.conf.json`(NSIS)→ 体积门 → artifact 上传;顶层 `on` 增加 `workflow_dispatch`。
+- **体积门脚本**(`src-tauri/scripts/check-installer-size.mjs`,§7.3:目标 <300 MiB、上限 <450 MiB):合成夹具三分支实测——500 MiB 拒绝(exit 1)、350 MiB 警告通过、100 MiB 通过。自测抓到并修复一个真 bug:flag 缺省时 `indexOf+1` 取到目录路径产生 NaN,NaN 比较恒 false 导致超额不拦截。
+- **本机约束(如实记录)**:本地 release 构建在 `windows` crate codegen 阶段 OOM fast-fail(0xc0000409)——机器常驻内存负载 81-84%,`windows` crate 的 codegen 峰值超出剩余物理+页面文件(实测 -j 1/-j 2 均崩)。安装包生产由此**归属 CI**(GH runner 16GB 干净环境 + MSVC);本机可验证的链路段(前端 dist、PyInstaller onedir、cargo test、体积门)全部就绪。若需本地出包,先释放内存至 ~8GB 可用再跑 `pnpm dlx @tauri-apps/cli build --config src-tauri/tauri.installer.conf.json`。
+- C9-1 剩余:干净机人工验收清单(等 CI 产出安装包)、桌面 OIDC 深链接与 embed 取舍(§13.5)。
