@@ -255,6 +255,16 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
 
 ### Fixed
 
+- `Base.metadata.create_all` no longer fails on SQLite. The ORM declaration of
+  the PostgreSQL-only GIN expression index `ix_document_chunks_text_tsv`
+  (`to_tsvector('simple', text)`, added for autogenerate parity) was not
+  dialect-gated, so any SQLite `create_all` — the path used by several test
+  fixtures — emitted `CREATE INDEX ... (to_tsvector(...))` and died with
+  "no such function: to_tsvector". The Alembic migration `0035` always guarded
+  the index behind a PostgreSQL check; the metadata now matches that behavior
+  through before/after-create listeners that detach the index for the DDL on
+  non-PostgreSQL dialects and restore it afterwards, so autogenerate parity is
+  unchanged.
 - The workflow command bar no longer hides its own actions at desktop widths.
   It was pinned to a single 56px row (`lg:h-14 lg:flex-nowrap`) while carrying
   far more controls than fit: navigation, name, undo/redo, layout, object and
