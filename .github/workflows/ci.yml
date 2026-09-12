@@ -48,6 +48,12 @@ jobs:
         working-directory: backend
         run: python -m uv run python -m scripts.contracts check
 
+      - name: Migration head parity
+        working-directory: backend
+        # CURRENT_REVISION gates /readyz, the scheduler, and the event relay;
+        # a stale value after adding a migration silently breaks all three.
+        run: python -m uv run python -m scripts.check_migration_head
+
       - name: Backend performance smoke
         working-directory: backend
         run: python -m uv run python -m scripts.performance_budget --output performance-smoke.json

@@ -499,5 +499,5 @@ C8 落地了站点级安全头与 HSTS。桌面下:
 
 已修:`CURRENT_REVISION` 上调至 `0047_evaluation_policy`,按既有惯例补 `EVALUATION_POLICY_TABLES`(0047 只加列不加表,故为空集)并并入 `CURRENT_TABLES`;同步更新三处钉住旧 head 的测试断言(`test_event_relay.py`、`test_org_deletion.py`、`test_provider_capability_migration.py`)。相关 25 个测试通过。
 
-这条缺陷说明发布流程缺一道校验:**建议在 CI 增加一个断言 `CURRENT_REVISION == alembic heads` 的检查**,否则下一次加迁移还会重犯。此项列入第 12 节文档同步的附带改动。
+这条缺陷说明发布流程缺一道校验:**建议在 CI 增加一个断言 `CURRENT_REVISION == alembic heads` 的检查**,否则下一次加迁移还会重犯。此项列入第 12 节文档同步的附带改动。**已落地(2026-09-12)**:`backend/scripts/check_migration_head.py`(纯文件系统比对 `ScriptDirectory.get_heads()` 与 `CURRENT_REVISION`,多头同样拒绝)+ `quality` job 新步骤「Migration head parity」+ `tests/test_migration_head.py` 4 个(真实图谱一致 / 多头 / 陈旧 revision / 匹配),使该失效模式在 CI 与常规测试套件中都会被拦截。
 

@@ -231,6 +231,15 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   retries like any other API call and a refusal lands as an inline message
   instead of saving an error page; an inverted window, or one wider than the
   server's 366-day limit, is refused before a request is spent.
+- CI and the backend suite now enforce migration-head parity: a new
+  `scripts/check_migration_head` step (plus a regular-suite test) fails the
+  build the moment `app.db.migrations.CURRENT_REVISION` stops matching the
+  alembic head, or the revision graph has more than one head.
+  `CURRENT_REVISION` gates three independent surfaces — the `/readyz`
+  migration check, the scheduler startup gate, and the event-relay startup
+  gate — so a new migration landing without the bump silently disabled all
+  three on every database already at head; that failure mode shipped once and
+  is now caught by the gate instead.
 
 ### Changed
 
