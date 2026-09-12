@@ -119,6 +119,21 @@
 
 **方案 B 的风险与验证前置**:SSE 经自定义协议透传是本阶段**第一个必须打通的技术验证点**(见 4.1 的 Spike)。若实测流式透传不可用(响应被缓冲、`EventSource` 收不到增量),回退为**方案 B'**:仅 `/api` 的普通 REST 走协议代理,三处 SSE 改为直连 `http://127.0.0.1:<port>` 并在后端 CORS 显式放行 `tauri://localhost`。B' 需要改动的前端点已限定为 `api/sse.ts` 与 `useWorkflowCollaboration.ts`,面很小。
 
+> **Spike 结论(2026-09-12,方案 B 被否,采用 B')**
+>
+> 按本节原设计,Spike 对「自定义协议能否流式透传 SSE」做了源码级验证,直接核对项目将采用的确切发布线 **`tauri-v2.11.5`** 与 **`wry-v0.57.0`**(Windows WebView2 后端),两层证据一致且相互独立:
+>
+> 1. **Tauri 公开 API 不存在分段发送通路**:`UriSchemeResponder` 是 `FnOnce`(自消费,只能调用一次),签名 `respond<T: Into<Cow<'static, [u8]>>>(self, http::Response<T>)` —— 整个响应体必须一次性物化后交出(`crates/tauri/src/app.rs` L2455-2462,tag `tauri-v2.11.5`)。API 面上没有任何 partial-write / chunk API。
+> 2. **wry 在 WebView2 上全量缓冲后才交还浏览器**:自定义协议经 `AddWebResourceRequested` + deferral 处理,`prepare_web_request_response` 用 `SHCreateMemStream(Some(content))` 把完整 body 物化进内存流后才 `SetResponse` + `Complete()`(`src/webview2/mod.rs` L1179-1200,tag `wry-v0.57.0`)。WebView2 拿到的是完整响应对象,`EventSource` 只能在上游流结束后一次性收到全部数据。
+> 3. wry 的 `ProxyConfig` 只是 HTTP-CONNECT/SOCKS **网络代理**配置,与自定义协议桥接无关。
+>
+> 两层相加是构造性结论:**任何经 `register_(a)synchronous_uri_scheme_protocol` 的响应都不可能增量到达页面**,不是可修的 bug 而是公开 API 不表达这种能力。因此不再需要运行时复测——单次实验只能证明某一次缓冲,源码证明的是不存在另一条路径。理论出路是对 wry 打叉改用自实现 `IStream` 活管道,但这超出本计划的成本边界,不做。
+>
+> **采用方案 B'**,并在此固化三个实现要点(正式 C9-1 按此执行):
+> - REST 仍走协议代理(缓冲语义对 JSON API 恰好正确,前端 fetch 零改动);
+> - 三处 SSE(`api/sse.ts` ×2、`useWorkflowCollaboration.ts` ×1)直连 `http://127.0.0.1:<动态端口>`,端口由 Rust 初始化脚本注入(如 `window.__AGENTCANVAS_BACKEND_ORIGIN__`);
+> - 后端 CORS 显式放行 **`tauri://localhost` 与 Windows 变体 `http://tauri.localhost`**(WebView2 下自定义协议页面的实际 origin 是后者),拒绝通配 `*`,且桌面模式下不启用 HSTS(见 5.2)。
+
 ### 3.3 嵌入 Python 运行时
 
 - **形态**:`--onedir` 而非 `--onefile`。onefile 每次启动解压到临时目录,冷启动慢且被杀软误报率高;onedir 首启即可用。
@@ -162,6 +177,8 @@
 1. 建最小 Tauri 2.11 工程,`register_asynchronous_uri_scheme_protocol` 代理 `/api` 到本机已在跑的 uvicorn。
 2. 用现有 `GET /api/executions/{id}/events` 验证 **SSE 增量是否真的逐条到达前端**(不是等流结束才吐)。
 3. 结论写入本文档 3.2:确认方案 B,或落到 B'。
+
+**Spike 已完成(2026-09-12)**:以源码级验证替代运行时实验——对 `tauri-v2.11.5` 的 `UriSchemeResponder`(FnOnce 单次完整 body)与 `wry-v0.57.0` 的 `SHCreateMemStream` 全量物化直接取证,证明增量送达路径**构造性不存在**;结论为落到 B',已固化在 3.2 的结论块。C9-1 正式实现阶段无需再建验证工程,Spike 的 1、2 两步作废。
 
 正式实现:
 - `src-tauri/` 工程接入 pnpm workspace;`tauri.conf.json` 的 `frontendDist` 指向现有 `frontend/dist`,`devUrl` 指向 5173,**现有 `pnpm dev` 流程不被破坏**。
@@ -218,9 +235,9 @@
 ### 5.2 CORS / CSP 放行 Tauri origin
 
 C8 落地了站点级安全头与 HSTS。桌面下:
-- 若走 3.2 方案 B(协议代理),前端与后端**同源**,CORS 不需放开——这是选 B 的额外收益。
-- 若落到 B',必须显式放行 `tauri://localhost`(以及 macOS 上的 `tauri://localhost` 变体)。**不能用 `allow_origins=["*"]`**,凭据请求下无效且是安全退步。
-- CSP 需要容纳 `tauri://` 与自托管字体;桌面模式下不应保留 HSTS(无 HTTPS 语义)。
+- REST 走 3.2 方案 B 的协议代理部分,前端与后端在自定义协议内**同源**,CORS 不需放开——这是混合方案保留的收益。
+- SSE 按 3.2 已定的 B' 直连 sidecar,必须显式放行 `tauri://localhost` 与 **Windows 变体 `http://tauri.localhost`**(WebView2 下自定义协议页面的实际 origin)。**不能用 `allow_origins=["*"]`**,凭据请求下无效且是安全退步。
+- CSP 需要容纳 `tauri://` / `http://tauri.localhost` 与自托管字体,并为 SSE 直连目标(`http://127.0.0.1:<port>`)加 `connect-src`;桌面模式下不应保留 HSTS(无 HTTPS 语义)。
 
 ### 5.3 sidecar 就绪与优雅退出
 
@@ -385,7 +402,7 @@ C8 落地了站点级安全头与 HSTS。桌面下:
 
 | 风险 | 影响 | 对策 |
 |---|---|---|
-| **SSE 经自定义协议不能流式透传** | 方案 B 不可用,执行流式输出与协作全断 | C9-1 第一步 Spike 就验证;已备方案 B'(SSE 直连 + CORS 放行),改动面已限定在两个文件 |
+| ~~**SSE 经自定义协议不能流式透传**~~ **已证实(2026-09-12 Spike)** | 方案 B 不可用,执行流式输出与协作全断 | 源码级证实为构造性限制(见 3.2 结论块);**按预案落到 B'**(REST 走协议代理 + SSE 直连 + CORS 放行含 Windows 变体 `http://tauri.localhost`),改动面仍是两个文件。此风险关闭 |
 | ~~PyInstaller 打包 chromadb ONNX 失败~~ | — | **已消除**:13.4 改用 `VECTOR_BACKEND=sql` 并整棵排除 chromadb,不打包即无此风险 |
 | **PyInstaller 打包其余重依赖失败**(langgraph / mcp / psycopg) | sidecar 起不来 | Spike 阶段验证打包产物能跑;最坏退路是嵌入完整 Python venv 而非 PyInstaller 冻结 |
 | **安装包体积失控** | 分发体验差 | 已由 13.4 降到 200–300MB 量级;体积门(< 450MB)写进 CI;排除未用 provider SDK |
