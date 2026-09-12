@@ -31,6 +31,7 @@ class Settings:
         object.__setattr__(self, "docker_secret_dir", Path(self.docker_secret_dir))
 
     # Server
+    app_profile: str = "standard"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     process_role: str = "all"
@@ -323,6 +324,13 @@ def _env(key: str, default: str = "") -> str:
     return value.strip() if value else default
 
 
+# C9 desktop profile: the WebView2 page origin for custom schemes. REST rides
+# the protocol proxy (same-origin, no CORS), but the three SSE consumers
+# connect directly to the sidecar port, so the webview origin must be in the
+# allow-list. macOS/Linux use the tauri scheme; Windows uses http://tauri.localhost.
+_TAURI_CORS_ORIGINS: tuple[str, ...] = ("tauri://localhost", "http://tauri.localhost")
+
+
 def _csv(key: str, default: str = "") -> tuple[str, ...]:
     return tuple(value.strip() for value in _env(key, default).split(",") if value.strip())
 
@@ -343,6 +351,17 @@ def validate_runtime_settings(settings: Settings) -> None:
         raise RuntimeError("DATABASE_URL must use sqlite+aiosqlite or postgresql+asyncpg") from exc
     if database_driver not in {"sqlite+aiosqlite", "postgresql+asyncpg"}:
         raise RuntimeError("DATABASE_URL must use sqlite+aiosqlite or postgresql+asyncpg")
+    if settings.app_profile == "desktop":
+        # C9 §5.1: the desktop profile freezes the single-machine degradation
+        # set so the Rust side only passes a port and a data directory.
+        if database_driver != "sqlite+aiosqlite":
+            raise RuntimeError("desktop profile requires sqlite+aiosqlite (single machine)")
+        if settings.process_role != "all":
+            raise RuntimeError("desktop profile requires APP_PROCESS_ROLE=all")
+        if settings.redis_url:
+            raise RuntimeError("desktop profile must not set REDIS_URL")
+        if settings.app_host not in {"127.0.0.1", "localhost"}:
+            raise RuntimeError("desktop profile binds 127.0.0.1 only")
     if settings.process_role != "all":
         if database_driver != "postgresql+asyncpg":
             raise RuntimeError("horizontal process roles require postgresql+asyncpg")
@@ -595,10 +614,18 @@ def load_settings() -> Settings:
         else Settings.cors_origins
     )
 
+    profile = _env("APP_PROFILE", "standard").strip().lower()
+    if profile not in {"standard", "desktop"}:
+        raise RuntimeError("APP_PROFILE must be standard or desktop")
+    desktop = profile == "desktop"
+    if desktop:
+        cors = cors + tuple(origin for origin in _TAURI_CORS_ORIGINS if origin not in cors)
+
     return Settings(
-        app_host=_env("APP_HOST", "0.0.0.0"),
+        app_profile=profile,
+        app_host="127.0.0.1" if desktop else _env("APP_HOST", "0.0.0.0"),
         app_port=int(_env("APP_PORT", "8000")),
-        process_role=_env("APP_PROCESS_ROLE", "all").lower(),
+        process_role="all" if desktop else _env("APP_PROCESS_ROLE", "all").lower(),
         instance_id=_env("APP_INSTANCE_ID") or socket.gethostname(),
         log_level=_env("LOG_LEVEL", "INFO").upper(),
         log_format=_env("LOG_FORMAT", "json").lower(),
@@ -687,9 +714,9 @@ def load_settings() -> Settings:
         local_embedding_dimensions=int(_env("LOCAL_EMBEDDING_DIMENSIONS", "384")),
         chroma_max_concurrent=int(_env("CHROMA_MAX_CONCURRENT", "4")),
         vector_max_concurrent=int(_env("VECTOR_MAX_CONCURRENT", "4")),
-        vector_backend=_env("VECTOR_BACKEND", "auto").lower() or "auto",
+        vector_backend=("sql" if desktop else _env("VECTOR_BACKEND", "auto").lower() or "auto"),
         database_url=_env("DATABASE_URL"),
-        redis_url=_env("REDIS_URL"),
+        redis_url="" if desktop else _env("REDIS_URL"),
         data_dir=Path(_env("APP_DATA_DIR", str(DATA_DIR))).expanduser(),
         redis_aof_dir=(Path(_env("REDIS_AOF_DIR")).expanduser() if _env("REDIS_AOF_DIR") else None),
         startup_migrations=_env("STARTUP_MIGRATIONS", "true").lower()
@@ -762,9 +789,7 @@ def load_settings() -> Settings:
         execution_event_retention_batch_size=int(
             _env("EXECUTION_EVENT_RETENTION_BATCH_SIZE", "1000")
         ),
-        execution_event_retention_grace_days=int(
-            _env("EXECUTION_EVENT_RETENTION_GRACE_DAYS", "7")
-        ),
+        execution_event_retention_grace_days=int(_env("EXECUTION_EVENT_RETENTION_GRACE_DAYS", "7")),
         smtp_host=_env("SMTP_HOST", ""),
         smtp_port=int(_env("SMTP_PORT", "587")),
         smtp_username=_env("SMTP_USERNAME", ""),
