@@ -152,13 +152,34 @@ sequenceDiagram
 
 ## 快速开始
 
-### 前置
+### 方式一：一键启动（推荐）
 
+```bash
+# Linux/macOS
+bash scripts/dev-start.sh
+
+# Windows
+scripts\dev-start.bat
+```
+
+脚本会自动检查依赖、安装、迁移数据库并启动前后端服务。
+
+### 方式二：Dev Container（VS Code）
+
+1. 安装 Docker Desktop 和 VS Code Remote - Containers 插件
+2. 打开项目，点击 "Reopen in Container"
+3. 容器内执行 `bash scripts/dev-start.sh`
+
+**包含**：Python 3.12、Node 20、PostgreSQL 17、Redis
+
+### 方式三：手动启动
+
+**前置要求**：
 - Python 3.12+(开发与 CI 实跑 3.13)
 - Node 20+ / pnpm
 - uv(`pip install uv`,本机用 `python -m uv` 调用)
 
-### 环境变量
+**环境变量**：
 
 复制 `.env.example` 为 `.env`,填入 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 与 `SECRET_KEY`。
 
@@ -168,7 +189,7 @@ sequenceDiagram
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### 后端
+**后端**：
 
 ```bash
 cd backend && python -m uv sync && python -m uv run uvicorn app.main:app --reload --port 8000
@@ -176,7 +197,7 @@ cd backend && python -m uv sync && python -m uv run uvicorn app.main:app --reloa
 
 就绪探针 <http://127.0.0.1:8000/readyz> 会逐项报告 database / migrations / checkpointer / config / vector_store / sandbox,任一不可用返回 503。
 
-### 前端
+**前端**：
 
 ```bash
 cd frontend && pnpm install && pnpm dev
@@ -184,7 +205,7 @@ cd frontend && pnpm install && pnpm dev
 
 打开 <http://127.0.0.1:5173>(`/api` 与 `/healthz` 已代理到后端)。
 
-### 灌入演示数据(可选)
+**演示数据**（可选）：
 
 ```bash
 cd backend && python -m uv run python -m app.services
@@ -192,11 +213,22 @@ cd backend && python -m uv run python -m app.services
 
 会写入演示工作流;已存在的行不动。
 
+完整开发环境指南见 [docs/quick-start.md](docs/quick-start.md)。
+
 ### 密钥引用
 
 模型 API Key 与 MCP 的 env/header 支持直接值或受限引用:`env://UPPER_CASE_NAME`、`docker://relative-file`、`external://path`。引用经 Fernet 加密保存,列表与编辑界面只返回掩码/来源,**运行时才解析** —— 所以轮换环境变量、Docker secret 或外部服务里的值都不用改库。
 
 `docker://` 只读 `DOCKER_SECRET_DIR` 下的有界 UTF-8 文件;`external://` 需要宿主通过 `create_app(..., external_secret_resolver=...)` 显式注入适配器,默认未配置时 fail closed,不会隐式访问网络、也不把进程环境当 fallback。
+
+### 开发工具
+
+项目已配置完整的开发环境工具：
+
+- **VS Code 调试配置**：8 个调试配置（FastAPI、Worker、Tests、Frontend、E2E 等）+ 2 个组合（Full Stack、Backend + Worker）
+- **数据库管理**：支持 DBeaver、TablePlus、pgAdmin，常用查询见 [docs/database-tools.md](docs/database-tools.md)
+- **一键启动脚本**：`scripts/dev-start.sh` (Linux/macOS) 和 `dev-start.bat` (Windows)
+- **Dev Container**：完整容器化开发环境（Python 3.12、Node 20、PostgreSQL 17、Redis）
 
 ## 部署
 
