@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LibraryBig,
   MessageSquareText,
+  Package,
   ScrollText,
   Users,
   Workflow,
@@ -27,6 +28,7 @@ export type DestinationKey =
   | "apps"
   | "chat"
   | "cost"
+  | "marketplace"
   | "models"
   | "mcp"
   | "quotas"
@@ -131,6 +133,12 @@ export const WORKSPACE_DESTINATIONS: readonly PlatformDestination[] = [
     key: "chat",
     icon: MessageSquareText,
     preload: safePreload(() => import("@/features/chat/ChatPage")),
+  },
+  {
+    to: "/marketplace",
+    key: "marketplace",
+    icon: Package,
+    preload: safePreload(() => import("@/features/marketplace/MarketplacePage")),
   },
   {
     to: "/cost",

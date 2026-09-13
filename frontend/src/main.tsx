@@ -74,6 +74,11 @@ const OverviewPage = lazy(() =>
     default: m.OverviewPage,
   })),
 );
+const MarketplacePage = lazy(() =>
+  import("@/features/marketplace/MarketplacePage").then((m) => ({
+    default: m.MarketplacePage,
+  })),
+);
 
 function PageLoader({ children }: { children: React.ReactNode }) {
   return (
@@ -119,6 +124,14 @@ const router = createBrowserRouter([
         element: (
           <PageLoader>
             <KnowledgePage />
+          </PageLoader>
+        ),
+      },
+      {
+        path: "marketplace",
+        element: (
+          <PageLoader>
+            <MarketplacePage />
           </PageLoader>
         ),
       },
