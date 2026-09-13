@@ -39,7 +39,10 @@ credentials.json
 # --- IDE / OS ---
 .nezha/
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
 *.swp
 .DS_Store
 Thumbs.db
