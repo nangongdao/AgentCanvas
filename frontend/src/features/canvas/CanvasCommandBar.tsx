@@ -239,7 +239,7 @@ export function CanvasCommandBar(props: Props) {
             currentVersion={props.version}
             onNotify={props.onNotify}
           />
-          <ExecutionHistory workflowId={props.workflowId} />
+          <ExecutionHistory workflowId={props.workflowId} workflowName={props.name} />
           {props.canAdmin && <McpManagerPanel />}
         </div>
 

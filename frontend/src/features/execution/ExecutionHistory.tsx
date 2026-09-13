@@ -11,6 +11,7 @@ import {
 
 import { listExecutions, type ExecutionDTO } from "@/api/endpoints/workflows";
 import { cn } from "@/utils/cn";
+import { ExportExecutions } from "./ExportExecutions";
 
 const STATUS_ICON: Record<string, ReactElement> = {
   succeeded: <CircleCheck size={12} className="text-ok" />,
@@ -42,10 +43,11 @@ function duration(start?: string | null, end?: string | null): string {
 
 interface Props {
   workflowId: string | null;
+  workflowName?: string;
 }
 
 /** Header popover listing past executions of the current workflow. */
-export function ExecutionHistory({ workflowId }: Props) {
+export function ExecutionHistory({ workflowId, workflowName }: Props) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<ExecutionDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -118,6 +120,9 @@ export function ExecutionHistory({ workflowId }: Props) {
               Execution History
             </span>
             <div className="flex items-center gap-1">
+              {workflowName && (
+                <ExportExecutions workflowId={workflowId} workflowName={workflowName} />
+              )}
               <button
                 type="button"
                 onClick={() => void refresh()}
