@@ -139,6 +139,10 @@ function BaseNodeComponent({
         isConnectionTarget && "ring-2 ring-pulse/70 border-pulse/60",
       )}
       data-node-id={id}
+      aria-label={`${data.label || meta.label} (${meta.label})`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
     >
       {isActive && <span className="node-running-sweep" />}
 

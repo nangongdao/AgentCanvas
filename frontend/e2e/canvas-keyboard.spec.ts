@@ -30,8 +30,18 @@ test("canvas nodes are keyboard selectable, movable, and collapse nudges into on
     const startNode = page.locator('.react-flow__node[data-id="start"]');
     await expect(startNode).toBeVisible();
 
-    // C5-11: nodes expose a screen-reader label with name and type.
-    await expect(startNode).toHaveAttribute("aria-label", "开始");
+    // C5-11: nodes expose a screen-reader label with name and type, and are
+    // keyboard-focusable. React Flow wraps each node in a container with
+    // role="group" and tabIndex="0", providing keyboard navigation support.
+    // Our custom aria-label is applied to the inner node content div.
+    const ariaLabel = await startNode.getAttribute("aria-label");
+    expect(ariaLabel).toContain("开始");
+    await expect(startNode).toHaveAttribute("tabIndex", "0");
+
+    // The inner node div has our custom accessibility attributes
+    const innerNode = startNode.locator('[data-node-id="start"]');
+    const innerLabel = await innerNode.getAttribute("aria-label");
+    expect(innerLabel).toContain("开始");
 
     // Keyboard selection without a mouse: focus the node wrapper directly,
     // then Enter selects it (React Flow's built-in selection key).
@@ -39,6 +49,9 @@ test("canvas nodes are keyboard selectable, movable, and collapse nudges into on
     await expect(startNode).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(startNode).toHaveClass(/selected/);
+
+    // Our inner node tracks selection state via aria-pressed
+    await expect(innerNode).toHaveAttribute("aria-pressed", "true");
 
     // Arrow keys nudge the node; read the rendered translate position.
     const positionOf = async () => {

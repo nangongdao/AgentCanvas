@@ -208,14 +208,22 @@ export async function cleanupWorkflow(
 }
 
 export async function login(page: Page, role: Role) {
-  await expect(page.locator("#auth-dialog-title")).toBeVisible();
-  // Seed the canvas-tour dismissal for every post-login navigation: each
-  // test runs in a fresh browser, and the first-visit tour modal would
-  // otherwise block canvas interactions across the suite. The onboarding
-  // spec removes the marker to exercise the real tour lifecycle.
+  // Dismiss the onboarding tour if it's showing (happens when page was
+  // navigated before login was called). The onboarding spec removes the
+  // localStorage marker to exercise the real tour lifecycle.
+  const tourDialog = page.locator('[role="dialog"]:has-text("画布快速上手")');
+  const isTourVisible = await tourDialog.isVisible().catch(() => false);
+  if (isTourVisible) {
+    await page.getByRole("button", { name: "跳过" }).click();
+    await expect(tourDialog).not.toBeVisible();
+  }
+
+  // Now seed the dismissal for future navigations in this session
   await page.addInitScript(() =>
     localStorage.setItem("agentcanvas:canvas-tour", "done"),
   );
+
+  await expect(page.locator("#auth-dialog-title")).toBeVisible();
   await page.getByRole("button", { name: "API Token", exact: true }).click();
   await page.getByLabel("API Token").fill(TOKENS[role]);
   await Promise.all([

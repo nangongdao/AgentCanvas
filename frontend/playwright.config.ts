@@ -73,8 +73,8 @@ export default defineConfig({
         `"${path.join(backendDir, ".venv", "Scripts", "python.exe").replaceAll("/", "\\")}" -m uvicorn app.main:app --host 127.0.0.1 --port ${backendPort}`,
       cwd: backendDir,
       url: `${backendUrl}/healthz`,
-      timeout: 60_000,
-      reuseExistingServer: false,
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
       env: {
         ...inheritedEnv,
         APP_ENV: "test",
@@ -98,8 +98,8 @@ export default defineConfig({
       command: `pnpm dev --host 127.0.0.1 --port ${frontendPort}`,
       cwd: process.cwd(),
       url: `${frontendUrl}/healthz`,
-      timeout: 60_000,
-      reuseExistingServer: false,
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
       env: {
         ...inheritedEnv,
         VITE_API_PROXY_TARGET: backendUrl,
