@@ -1,343 +1,201 @@
-"""Google Docs MCP Server - Read and write Google Docs."""
+"""Google Docs MCP server — read/write Google Docs via the Docs/Drive APIs.
+
+Uses the MCP SDK 2.x ``MCPServer`` API (``@mcp.tool()``) so the file works
+with the same SDK version as the other built-in servers.
+"""
+
+from __future__ import annotations
 
 import os
 from typing import Any
 
-from mcp.server import Server
-from mcp.types import Resource, Tool
+from mcp.server.mcpserver import MCPServer
+
+mcp = MCPServer("google-docs")
+
+_CREDENTIALS_PATH = os.getenv("GOOGLE_DOCS_CREDENTIALS_PATH", "")
+
+_SCOPES = [
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/drive.file",
+]
 
 
-def create_google_docs_server() -> Server:
-    """Create Google Docs MCP server instance."""
-    server = Server("google-docs")
+def _clients():
+    """Build docs/drive service clients from the configured credentials."""
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
 
-    # Configuration from environment
-    credentials_path = os.getenv("GOOGLE_DOCS_CREDENTIALS_PATH", "")
+    credentials = service_account.Credentials.from_service_account_file(
+        _CREDENTIALS_PATH, scopes=_SCOPES
+    )
+    docs = build("docs", "v1", credentials=credentials)
+    drive = build("drive", "v3", credentials=credentials)
+    return docs, drive
 
-    @server.list_resources()
-    async def list_resources() -> list[Resource]:
-        """List available Google Docs resources."""
-        return [
-            Resource(
-                uri="gdocs://documents",
-                name="Google Documents",
-                mimeType="application/json",
-                description="Access Google Docs documents",
-            ),
-        ]
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        """List available Google Docs tools."""
-        return [
-            Tool(
-                name="gdocs_create",
-                description="Create a new Google Doc",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "title": {
-                            "type": "string",
-                            "description": "Document title",
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "Initial document content (plain text)",
-                        },
-                    },
-                    "required": ["title"],
-                },
-            ),
-            Tool(
-                name="gdocs_read",
-                description="Read content from a Google Doc",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "document_id": {
-                            "type": "string",
-                            "description": "Google Docs document ID",
-                        },
-                    },
-                    "required": ["document_id"],
-                },
-            ),
-            Tool(
-                name="gdocs_append",
-                description="Append text to the end of a Google Doc",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "document_id": {
-                            "type": "string",
-                            "description": "Document ID",
-                        },
-                        "text": {
-                            "type": "string",
-                            "description": "Text to append",
-                        },
-                    },
-                    "required": ["document_id", "text"],
-                },
-            ),
-            Tool(
-                name="gdocs_replace",
-                description="Replace text in a Google Doc",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "document_id": {
-                            "type": "string",
-                            "description": "Document ID",
-                        },
-                        "find": {
-                            "type": "string",
-                            "description": "Text to find",
-                        },
-                        "replace": {
-                            "type": "string",
-                            "description": "Replacement text",
-                        },
-                        "all_occurrences": {
-                            "type": "boolean",
-                            "description": "Replace all occurrences",
-                            "default": True,
-                        },
-                    },
-                    "required": ["document_id", "find", "replace"],
-                },
-            ),
-            Tool(
-                name="gdocs_share",
-                description="Share a Google Doc with email address",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "document_id": {
-                            "type": "string",
-                            "description": "Document ID",
-                        },
-                        "email": {
-                            "type": "string",
-                            "description": "Email address to share with",
-                        },
-                        "role": {
-                            "type": "string",
-                            "description": "Permission role (reader, writer, owner)",
-                            "default": "writer",
-                        },
-                    },
-                    "required": ["document_id", "email"],
-                },
-            ),
-            Tool(
-                name="gdocs_export",
-                description="Export Google Doc to different format",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "document_id": {
-                            "type": "string",
-                            "description": "Document ID",
-                        },
-                        "format": {
-                            "type": "string",
-                            "description": "Export format (pdf, docx, txt, html)",
-                            "default": "pdf",
-                        },
-                    },
-                    "required": ["document_id"],
-                },
-            ),
-        ]
+def _credentials_missing() -> bool:
+    return not _CREDENTIALS_PATH or not os.path.exists(_CREDENTIALS_PATH)
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: Any) -> list[Any]:
-        """Handle tool execution."""
-        if not credentials_path or not os.path.exists(credentials_path):
-            return [
+
+@mcp.tool()
+def gdocs_create(title: str, content: str = "") -> str:
+    """Create a new Google Doc with the given title (and optional content)."""
+    if _credentials_missing():
+        return "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH."
+
+    try:
+        docs, _ = _clients()
+        document = docs.documents().create(body={"title": title}).execute()
+        document_id = document["documentId"]
+        if content:
+            requests = [
                 {
-                    "type": "text",
-                    "text": "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH.",
+                    "insertText": {
+                        "location": {"index": 1},
+                        "text": content,
+                    }
                 }
             ]
+            docs.documents().batchUpdate(
+                documentId=document_id, body={"requests": requests}
+            ).execute()
+        return (
+            f"Created document: {title}\n"
+            f"ID: {document_id}\n"
+            f"URL: https://docs.google.com/document/d/{document_id}/edit"
+        )
+    except ImportError:
+        return "Error: Google API client not installed. Run: pip install google-api-python-client google-auth"
+    except Exception as e:
+        return f"Google Docs error: {str(e)}"
 
-        try:
-            # Import Google API libraries only when needed
-            from google.oauth2 import service_account
-            from googleapiclient.discovery import build
 
-            SCOPES = [
-                "https://www.googleapis.com/auth/documents",
-                "https://www.googleapis.com/auth/drive.file",
-            ]
+@mcp.tool()
+def gdocs_read(document_id: str) -> str:
+    """Read the plain-text content of a Google Doc by id."""
+    if _credentials_missing():
+        return "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH."
 
-            credentials = service_account.Credentials.from_service_account_file(
-                credentials_path, scopes=SCOPES
-            )
+    try:
+        docs, _ = _clients()
+        document = docs.documents().get(documentId=document_id).execute()
+        title = document.get("title", "")
+        text_parts: list[str] = []
+        for element in document.get("body", {}).get("content", []):
+            for text_run in element.get("paragraph", {}).get("elements", []):
+                if "textRun" in text_run:
+                    text_parts.append(text_run["textRun"].get("content", ""))
+        return f"Document: {title}\n\n{''.join(text_parts)}"
+    except ImportError:
+        return "Error: Google API client not installed. Run: pip install google-api-python-client google-auth"
+    except Exception as e:
+        return f"Google Docs error: {str(e)}"
 
-            docs_service = build("docs", "v1", credentials=credentials)
-            drive_service = build("drive", "v3", credentials=credentials)
 
-            if name == "gdocs_create":
-                title = arguments["title"]
-                content = arguments.get("content", "")
+@mcp.tool()
+def gdocs_append(document_id: str, text: str) -> str:
+    """Append text to the end of a Google Doc."""
+    if _credentials_missing():
+        return "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH."
 
-                document = docs_service.documents().create(body={"title": title}).execute()
-                document_id = document["documentId"]
-
-                if content:
-                    requests = [
-                        {
-                            "insertText": {
-                                "location": {"index": 1},
-                                "text": content,
-                            }
-                        }
-                    ]
-                    docs_service.documents().batchUpdate(
-                        documentId=document_id, body={"requests": requests}
-                    ).execute()
-
-                return [
-                    {
-                        "type": "text",
-                        "text": f"Created document: {title}\nID: {document_id}\nURL: https://docs.google.com/document/d/{document_id}/edit",
-                    }
-                ]
-
-            elif name == "gdocs_read":
-                document_id = arguments["document_id"]
-                document = docs_service.documents().get(documentId=document_id).execute()
-
-                title = document.get("title")
-                content = document.get("body", {}).get("content", [])
-
-                text_content = ""
-                for element in content:
-                    if "paragraph" in element:
-                        for text_run in element["paragraph"].get("elements", []):
-                            if "textRun" in text_run:
-                                text_content += text_run["textRun"].get("content", "")
-
-                return [
-                    {
-                        "type": "text",
-                        "text": f"Document: {title}\n\n{text_content}",
-                    }
-                ]
-
-            elif name == "gdocs_append":
-                document_id = arguments["document_id"]
-                text = arguments["text"]
-
-                document = docs_service.documents().get(documentId=document_id).execute()
-                end_index = document["body"]["content"][-1]["endIndex"]
-
-                requests = [
-                    {
-                        "insertText": {
-                            "location": {"index": end_index - 1},
-                            "text": text,
-                        }
-                    }
-                ]
-
-                docs_service.documents().batchUpdate(
-                    documentId=document_id, body={"requests": requests}
-                ).execute()
-
-                return [{"type": "text", "text": f"Appended text to document {document_id}"}]
-
-            elif name == "gdocs_replace":
-                document_id = arguments["document_id"]
-                find_text = arguments["find"]
-                replace_text = arguments["replace"]
-
-                requests = [
-                    {
-                        "replaceAllText": {
-                            "containsText": {
-                                "text": find_text,
-                                "matchCase": False,
-                            },
-                            "replaceText": replace_text,
-                        }
-                    }
-                ]
-
-                result = docs_service.documents().batchUpdate(
-                    documentId=document_id, body={"requests": requests}
-                ).execute()
-
-                occurrences = result["replies"][0]["replaceAllText"].get("occurrencesChanged", 0)
-                return [
-                    {
-                        "type": "text",
-                        "text": f"Replaced {occurrences} occurrence(s) in document {document_id}",
-                    }
-                ]
-
-            elif name == "gdocs_share":
-                document_id = arguments["document_id"]
-                email = arguments["email"]
-                role = arguments.get("role", "writer")
-
-                permission = {
-                    "type": "user",
-                    "role": role,
-                    "emailAddress": email,
+    try:
+        docs, _ = _clients()
+        document = docs.documents().get(documentId=document_id).execute()
+        end_index = document["body"]["content"][-1]["endIndex"]
+        requests = [
+            {
+                "insertText": {
+                    "location": {"index": end_index - 1},
+                    "text": text,
                 }
+            }
+        ]
+        docs.documents().batchUpdate(
+            documentId=document_id, body={"requests": requests}
+        ).execute()
+        return f"Appended text to document {document_id}"
+    except ImportError:
+        return "Error: Google API client not installed. Run: pip install google-api-python-client google-auth"
+    except Exception as e:
+        return f"Google Docs error: {str(e)}"
 
-                drive_service.permissions().create(
-                    fileId=document_id,
-                    body=permission,
-                    sendNotificationEmail=True,
-                ).execute()
 
-                return [
-                    {
-                        "type": "text",
-                        "text": f"Shared document {document_id} with {email} as {role}",
-                    }
-                ]
+@mcp.tool()
+def gdocs_replace(
+    document_id: str,
+    find: str,
+    replace: str,
+    all_occurrences: bool = True,
+) -> str:
+    """Replace text in a Google Doc ('find' -> 'replace')."""
+    if _credentials_missing():
+        return "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH."
 
-            elif name == "gdocs_export":
-                document_id = arguments["document_id"]
-                export_format = arguments.get("format", "pdf")
-
-                mime_types = {
-                    "pdf": "application/pdf",
-                    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "txt": "text/plain",
-                    "html": "text/html",
+    try:
+        docs, _ = _clients()
+        requests = [
+            {
+                "replaceAllText": {
+                    "containsText": {"text": find, "matchCase": False},
+                    "replaceText": replace,
                 }
+            }
+        ]
+        result = docs.documents().batchUpdate(
+            documentId=document_id, body={"requests": requests}
+        ).execute()
+        occurrences = result["replies"][0]["replaceAllText"].get("occurrencesChanged", 0)
+        return f"Replaced {occurrences} occurrence(s) in document {document_id}"
+    except ImportError:
+        return "Error: Google API client not installed. Run: pip install google-api-python-client google-auth"
+    except Exception as e:
+        return f"Google Docs error: {str(e)}"
 
-                mime_type = mime_types.get(export_format, "application/pdf")
 
-                drive_service.files().export_media(
-                    fileId=document_id, mimeType=mime_type
-                )
+@mcp.tool()
+def gdocs_share(document_id: str, email: str, role: str = "writer") -> str:
+    """Share a Google Doc with an email address (role: reader/writer/owner)."""
+    if _credentials_missing():
+        return "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH."
 
-                # Note: In real implementation, would save to file or return bytes
-                return [
-                    {
-                        "type": "text",
-                        "text": f"Exported document {document_id} as {export_format}",
-                    }
-                ]
+    try:
+        _, drive = _clients()
+        permission = {"type": "user", "role": role, "emailAddress": email}
+        drive.permissions().create(
+            fileId=document_id,
+            body=permission,
+            sendNotificationEmail=True,
+        ).execute()
+        return f"Shared document {document_id} with {email} as {role}"
+    except ImportError:
+        return "Error: Google API client not installed. Run: pip install google-api-python-client google-auth"
+    except Exception as e:
+        return f"Google Docs error: {str(e)}"
 
-            else:
-                return [{"type": "text", "text": f"Unknown tool: {name}"}]
 
-        except ImportError:
-            return [
-                {
-                    "type": "text",
-                    "text": "Error: Google API client not installed. Run: pip install google-api-python-client google-auth",
-                }
-            ]
-        except Exception as e:
-            return [{"type": "text", "text": f"Google Docs error: {str(e)}"}]
+@mcp.tool()
+def gdocs_export(document_id: str, format: str = "pdf") -> str:
+    """Export a Google Doc to pdf/docx/txt/html."""
+    if _credentials_missing():
+        return "Error: Google Docs credentials not configured. Set GOOGLE_DOCS_CREDENTIALS_PATH."
 
-    return server
+    try:
+        _, drive = _clients()
+        mime_types = {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "txt": "text/plain",
+            "html": "text/html",
+        }
+        mime_type = mime_types.get(format, "application/pdf")
+        drive.files().export_media(fileId=document_id, mimeType=mime_type)
+        return f"Exported document {document_id} as {format}"
+    except ImportError:
+        return "Error: Google API client not installed. Run: pip install google-api-python-client google-auth"
+    except Exception as e:
+        return f"Google Docs error: {str(e)}"
+
+
+if __name__ == "__main__":
+    mcp.run()
