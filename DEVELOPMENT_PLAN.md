@@ -163,10 +163,28 @@
 - 配置完整：tsconfig.json, eslint, editorconfig
 - 依赖已安装（node_modules, pnpm-lock.yaml）
 
-#### Python SDK（2-3天）
-- PyPI 包
-- 简化 API 调用
-- 错误处理统一
+#### ✅ Python SDK（已完成）
+**目标**：实现 `agentcanvas` PyPI 包（P1 高优先级）
+
+**已完成**：
+- [x] PyPI-ready 包结构（pyproject.toml, hatchling） - commit ff32f26
+- [x] 完整类型安全（Pydantic models, py.typed, mypy）
+- [x] Client 方法（workflows, executions, providers CRUD）
+- [x] 异常层次（NotFoundError, AuthenticationError等）
+- [x] Context manager 支持
+- [x] 三个示例（basic_usage, provider_management, error_handling）
+- [x] 完整测试套件（9 tests, 100% passed）
+- [x] 文档（README, CHANGELOG 0.1.0, PUBLISHING guide）
+- [x] CI workflow（multi-platform × Python 3.9-3.12）
+- [x] 质量验证（pytest, mypy, ruff, twine check 全部通过）
+- 完成日期：2026-09-13
+
+**技术实现**：
+- 项目位置：`sdk/python/`
+- 核心模块：client.py, types.py, exceptions.py
+- 构建产物：agentcanvas-0.1.0.tar.gz 和 .whl
+- CI 集成：`.github/workflows/python-sdk-ci.yml`
+- README.md 已更新 SDK 使用示例
 
 #### 开发环境优化（2-3天）
 - 一键启动脚本
