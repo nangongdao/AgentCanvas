@@ -10,6 +10,7 @@ from app.core.security import SecretBox
 from app.db.models import ModelConfig
 from app.providers import anthropic_provider as _anthropic  # noqa: F401
 from app.providers import gemini_provider as _gemini  # noqa: F401
+from app.providers import mistral_provider as _mistral  # noqa: F401
 from app.providers import mock_provider as _mock  # noqa: F401
 from app.providers import ollama_provider as _ollama  # noqa: F401
 from app.providers import openai_provider as _openai  # noqa: F401
@@ -30,7 +31,7 @@ from app.providers.base import (
 #: Adapters that accept an injected ``httpx.AsyncClient``. Only these can take
 #: the caller-supplied client, so the factory stays explicit about who owns the
 #: connection pool.
-_CLIENT_AWARE_PROVIDERS = frozenset({"openai_compat", "gemini"})
+_CLIENT_AWARE_PROVIDERS = frozenset({"openai_compat", "gemini", "mistral"})
 
 
 def provider_default_capabilities(name: str) -> ProviderCapabilities:
