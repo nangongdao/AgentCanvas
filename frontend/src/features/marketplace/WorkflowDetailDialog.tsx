@@ -8,7 +8,6 @@ import {
   User,
   Package,
   X,
-  ExternalLink,
   MessageSquare,
 } from "lucide-react";
 
@@ -35,6 +34,20 @@ function errorMessage(error: unknown): string {
     return typeof error.detail === "string" ? error.detail : JSON.stringify(error.detail);
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Validate icon URL protocol to prevent XSS via javascript:/data: URLs. */
+function getSafeIconUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 export function WorkflowDetailDialog({ workflowId, onClose, onNotify, onInstalled }: Props) {
@@ -113,9 +126,9 @@ export function WorkflowDetailDialog({ workflowId, onClose, onNotify, onInstalle
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
           <div className="flex items-center gap-3">
-            {workflow?.icon_url ? (
+            {getSafeIconUrl(workflow?.icon_url ?? null) ? (
               <img
-                src={workflow.icon_url}
+                src={getSafeIconUrl(workflow?.icon_url ?? null)!}
                 alt=""
                 className="h-12 w-12 rounded-lg border border-line object-cover"
               />

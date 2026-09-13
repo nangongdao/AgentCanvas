@@ -2,19 +2,26 @@
 
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import EditorDep, ViewerDep, get_session
 from app.db.models.identity import User
-from app.db.models.marketplace import MarketplaceWorkflow, WorkflowReview
+from app.db.models.marketplace import MarketplaceWorkflow, MarketplaceReview
 from app.db.models.workflow import Workflow
 
-router = APIRouter(prefix="/marketplace", tags=["marketplace"])
+router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+# In "disabled" auth mode (single-user) FastAPI runs as a local-development
+# principal without a persistent user row. This stable id backs marketplace
+# writes until a multi-user login flow is active.
+LOCAL_USER_ID = "local"
 
 
 # ==================== Request/Response Models ====================
@@ -31,6 +38,33 @@ class PublishMetadata(BaseModel):
     version: str = Field(..., min_length=1, max_length=50)
     changelog: str | None = None
     dependencies: dict = Field(default_factory=dict)
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, tags: list[str]) -> list[str]:
+        """Limit tag count/size and reject control characters."""
+        if len(tags) > 10:
+            raise ValueError("标签数量不能超过10个")
+        for tag in tags:
+            if not tag.strip() or len(tag.strip()) > 50:
+                raise ValueError("每个标签必须为1-50个字符")
+            if any(ord(ch) < 32 for ch in tag):
+                raise ValueError("标签不能包含控制字符")
+        return [tag.strip() for tag in tags]
+
+    @field_validator("icon_url")
+    @classmethod
+    def validate_icon_url(cls, url: str | None) -> str | None:
+        """Reject non-http(s) or malformed icon URLs server-side."""
+        if url is None or not url.strip():
+            return None
+        url = url.strip()
+        if len(url) > 512:
+            raise ValueError("图标URL长度不能超过512个字符")
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("图标URL必须使用http或https协议")
+        return url
 
 
 class MarketplaceWorkflowResponse(BaseModel):
@@ -92,17 +126,58 @@ class InstallResponse(BaseModel):
 # ==================== Publish Workflow ====================
 
 
+async def _author_display_name(
+    session: AsyncSession, user_id: str
+) -> str:
+    """Fetch a user's display name, falling back to their email."""
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return "unknown"
+    return user.display_name or user.email
+
+
+async def _require_user_id(session: AsyncSession, principal) -> str:
+    """Return the authenticated user id or reject service-account calls.
+
+    In "disabled" auth mode (single developer, no login) every request is the
+    local principal. Ensure a synthetic User row exists so author_id FKs stay
+    valid, then reuse it for all local marketplace writes.
+    """
+    if principal.user_id is not None:
+        return principal.user_id
+    if principal.auth_method != "disabled":
+        raise HTTPException(
+            status_code=403,
+            detail="service accounts cannot publish or install marketplace workflows",
+        )
+    # Single-user mode: create/reuse a stable local user row.
+    result = await session.execute(select(User).where(User.id == LOCAL_USER_ID))
+    local_user = result.scalar_one_or_none()
+    if local_user is None:
+        local_user = User(
+            id=LOCAL_USER_ID,
+            email="local@agentcanvas.local",
+            display_name="本地用户",
+        )
+        session.add(local_user)
+        await session.commit()
+    return LOCAL_USER_ID
+
+
 @router.post("/publish", response_model=MarketplaceWorkflowResponse)
 async def publish_workflow(
     workflow_id: str,
     metadata: PublishMetadata,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+    principal: EditorDep,
 ) -> MarketplaceWorkflowResponse:
     """Publish a workflow to the marketplace."""
 
+    user_id = await _require_user_id(session, principal)
+
     # 1. Verify workflow exists and user owns it
-    result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
+    result = await session.execute(select(Workflow).where(Workflow.id == workflow_id))
     workflow = result.scalar_one_or_none()
 
     if not workflow:
@@ -112,7 +187,7 @@ async def publish_workflow(
     # For now, assume current_user owns all workflows
 
     # 2. Check if already published
-    result = await db.execute(
+    result = await session.execute(
         select(MarketplaceWorkflow).where(
             MarketplaceWorkflow.workflow_id == workflow_id
         )
@@ -130,7 +205,7 @@ async def publish_workflow(
     marketplace_workflow = MarketplaceWorkflow(
         id=uuid4().hex,
         workflow_id=workflow_id,
-        author_id=current_user.id,
+        author_id=user_id,
         display_name=metadata.display_name,
         description=metadata.description,
         category=metadata.category,
@@ -144,15 +219,15 @@ async def publish_workflow(
         updated_at=now,
     )
 
-    db.add(marketplace_workflow)
-    await db.commit()
-    await db.refresh(marketplace_workflow)
+    session.add(marketplace_workflow)
+    await session.commit()
+    await session.refresh(marketplace_workflow)
 
     return MarketplaceWorkflowResponse(
         id=marketplace_workflow.id,
         workflow_id=marketplace_workflow.workflow_id,
         author_id=marketplace_workflow.author_id,
-        author_name=current_user.display_name or current_user.email,
+        author_name=await _author_display_name(session, user_id),
         display_name=marketplace_workflow.display_name,
         description=marketplace_workflow.description,
         category=marketplace_workflow.category,
@@ -177,13 +252,15 @@ async def publish_workflow(
 async def update_published_workflow(
     marketplace_id: str,
     metadata: PublishMetadata,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+    principal: EditorDep,
 ) -> MarketplaceWorkflowResponse:
     """Update an already published workflow in the marketplace."""
 
+    user_id = await _require_user_id(session, principal)
+
     # 1. Get existing marketplace workflow
-    result = await db.execute(
+    result = await session.execute(
         select(MarketplaceWorkflow).where(MarketplaceWorkflow.id == marketplace_id)
     )
     marketplace_workflow = result.scalar_one_or_none()
@@ -192,7 +269,7 @@ async def update_published_workflow(
         raise HTTPException(status_code=404, detail="Marketplace workflow not found")
 
     # 2. Check ownership
-    if marketplace_workflow.author_id != current_user.id:
+    if marketplace_workflow.author_id != user_id:
         raise HTTPException(
             status_code=403, detail="Only the author can update this workflow"
         )
@@ -208,14 +285,14 @@ async def update_published_workflow(
     marketplace_workflow.dependencies = metadata.dependencies
     marketplace_workflow.updated_at = datetime.now(UTC)
 
-    await db.commit()
-    await db.refresh(marketplace_workflow)
+    await session.commit()
+    await session.refresh(marketplace_workflow)
 
     return MarketplaceWorkflowResponse(
         id=marketplace_workflow.id,
         workflow_id=marketplace_workflow.workflow_id,
         author_id=marketplace_workflow.author_id,
-        author_name=current_user.display_name or current_user.email,
+        author_name=await _author_display_name(session, user_id),
         display_name=marketplace_workflow.display_name,
         description=marketplace_workflow.description,
         category=marketplace_workflow.category,
@@ -238,7 +315,8 @@ async def update_published_workflow(
 
 @router.get("/workflows", response_model=list[MarketplaceWorkflowResponse])
 async def list_marketplace_workflows(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    session: SessionDep,
+    _principal: ViewerDep,
     category: str | None = None,
     tags: list[str] = Query(default_factory=list),
     search: str | None = None,
@@ -265,12 +343,22 @@ async def list_marketplace_workflows(
 
     # Search by display name, description, or author name
     if search and search.strip():
-        search_term = f"%{search.strip().lower()}%"
+        # Escape LIKE wildcards (%/_) using '!' as the escape char so user
+        # input is matched literally; '!' itself is escaped too. '!' has no
+        # special meaning in SQL string literals (unlike backslash), so this
+        # is portable across SQLite and PostgreSQL inside ilike().
+        escaped = (
+            search.strip()
+            .replace("!", "!!")
+            .replace("%", "!%")
+            .replace("_", "!_")
+        )
+        search_term = f"%{escaped.lower()}%"
         query = query.where(
-            (MarketplaceWorkflow.display_name.ilike(search_term))
-            | (MarketplaceWorkflow.description.ilike(search_term))
-            | (User.display_name.ilike(search_term))
-            | (User.email.ilike(search_term))
+            MarketplaceWorkflow.display_name.ilike(search_term, escape="!")
+            | MarketplaceWorkflow.description.ilike(search_term, escape="!")
+            | User.display_name.ilike(search_term, escape="!")
+            | User.email.ilike(search_term, escape="!"),
         )
 
     # Sort
@@ -285,7 +373,7 @@ async def list_marketplace_workflows(
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
 
-    result = await db.execute(query)
+    result = await session.execute(query)
     rows = result.all()
 
     return [
@@ -319,11 +407,12 @@ async def list_marketplace_workflows(
 @router.get("/workflows/{workflow_id}", response_model=MarketplaceWorkflowResponse)
 async def get_marketplace_workflow(
     workflow_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    session: SessionDep,
+    _principal: ViewerDep,
 ) -> MarketplaceWorkflowResponse:
     """Get marketplace workflow details."""
 
-    result = await db.execute(
+    result = await session.execute(
         select(MarketplaceWorkflow, User)
         .join(User, MarketplaceWorkflow.author_id == User.id)
         .where(MarketplaceWorkflow.id == workflow_id)
@@ -363,13 +452,15 @@ async def get_marketplace_workflow(
 @router.post("/install/{workflow_id}", response_model=InstallResponse)
 async def install_workflow(
     workflow_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+    principal: EditorDep,
 ) -> InstallResponse:
     """Install a workflow from marketplace (clone to user's workspace)."""
 
+    _user_id = await _require_user_id(session, principal)
+
     # 1. Get marketplace workflow
-    result = await db.execute(
+    result = await session.execute(
         select(MarketplaceWorkflow).where(MarketplaceWorkflow.id == workflow_id)
     )
     mw = result.scalar_one_or_none()
@@ -381,7 +472,7 @@ async def install_workflow(
         raise HTTPException(status_code=400, detail="Workflow not approved for installation")
 
     # 2. Get source workflow
-    result = await db.execute(select(Workflow).where(Workflow.id == mw.workflow_id))
+    result = await session.execute(select(Workflow).where(Workflow.id == mw.workflow_id))
     source_workflow = result.scalar_one_or_none()
 
     if not source_workflow:
@@ -398,13 +489,13 @@ async def install_workflow(
         project_id=None,
     )
 
-    db.add(cloned_workflow)
+    session.add(cloned_workflow)
 
     # 4. Increment download count
     mw.downloads += 1
     mw.updated_at = datetime.now(UTC)
 
-    await db.commit()
+    await session.commit()
 
     return InstallResponse(
         workflow_id=cloned_workflow.id,
@@ -419,13 +510,15 @@ async def install_workflow(
 async def create_review(
     workflow_id: str,
     review_input: ReviewInput,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+    principal: EditorDep,
 ) -> ReviewResponse:
     """Create or update a review for a marketplace workflow."""
 
+    user_id = await _require_user_id(session, principal)
+
     # 1. Verify marketplace workflow exists
-    result = await db.execute(
+    result = await session.execute(
         select(MarketplaceWorkflow).where(MarketplaceWorkflow.id == workflow_id)
     )
     mw = result.scalar_one_or_none()
@@ -434,10 +527,10 @@ async def create_review(
         raise HTTPException(status_code=404, detail="Marketplace workflow not found")
 
     # 2. Check if user already reviewed
-    result = await db.execute(
-        select(WorkflowReview).where(
-            WorkflowReview.marketplace_workflow_id == workflow_id,
-            WorkflowReview.user_id == current_user.id,
+    result = await session.execute(
+        select(MarketplaceReview).where(
+            MarketplaceReview.marketplace_workflow_id == workflow_id,
+            MarketplaceReview.user_id == user_id,
         )
     )
     existing_review = result.scalar_one_or_none()
@@ -456,14 +549,14 @@ async def create_review(
         mw.rating = (mw.rating * mw.rating_count + rating_diff) / mw.rating_count
         mw.updated_at = now
 
-        await db.commit()
-        await db.refresh(existing_review)
+        await session.commit()
+        await session.refresh(existing_review)
 
         return ReviewResponse(
             id=existing_review.id,
             marketplace_workflow_id=existing_review.marketplace_workflow_id,
             user_id=existing_review.user_id,
-            user_name=current_user.display_name or current_user.email,
+            user_name=await _author_display_name(session, user_id),
             rating=existing_review.rating,
             comment=existing_review.comment,
             created_at=existing_review.created_at,
@@ -471,17 +564,17 @@ async def create_review(
         )
 
     # 3. Create new review
-    review = WorkflowReview(
+    review = MarketplaceReview(
         id=uuid4().hex,
         marketplace_workflow_id=workflow_id,
-        user_id=current_user.id,
+        user_id=user_id,
         rating=review_input.rating,
         comment=review_input.comment,
         created_at=now,
         updated_at=now,
     )
 
-    db.add(review)
+    session.add(review)
 
     # 4. Update aggregate rating
     new_rating_count = mw.rating_count + 1
@@ -489,14 +582,14 @@ async def create_review(
     mw.rating_count = new_rating_count
     mw.updated_at = now
 
-    await db.commit()
-    await db.refresh(review)
+    await session.commit()
+    await session.refresh(review)
 
     return ReviewResponse(
         id=review.id,
         marketplace_workflow_id=review.marketplace_workflow_id,
         user_id=review.user_id,
-        user_name=current_user.display_name or current_user.email,
+        user_name=await _author_display_name(session, user_id),
         rating=review.rating,
         comment=review.comment,
         created_at=review.created_at,
@@ -507,23 +600,24 @@ async def create_review(
 @router.get("/workflows/{workflow_id}/reviews", response_model=list[ReviewResponse])
 async def list_reviews(
     workflow_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    session: SessionDep,
+    _principal: ViewerDep,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
 ) -> list[ReviewResponse]:
     """Get reviews for a marketplace workflow."""
 
     query = (
-        select(WorkflowReview, User)
-        .join(User, WorkflowReview.user_id == User.id)
-        .where(WorkflowReview.marketplace_workflow_id == workflow_id)
-        .order_by(desc(WorkflowReview.created_at))
+        select(MarketplaceReview, User)
+        .join(User, MarketplaceReview.user_id == User.id)
+        .where(MarketplaceReview.marketplace_workflow_id == workflow_id)
+        .order_by(desc(MarketplaceReview.created_at))
     )
 
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
 
-    result = await db.execute(query)
+    result = await session.execute(query)
     rows = result.all()
 
     return [

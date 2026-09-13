@@ -14,7 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -112,6 +112,11 @@ class WorkflowReview(Base):
     decided_by_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     decided_by_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # The review requester (foreign_keys disambiguates the two user FKs).
+    user: Mapped["User | None"] = relationship(
+        back_populates="workflow_reviews", foreign_keys=[requested_by_user_id]
+    )
 
 
 __all__ = ["WorkflowComment", "WorkflowReview"]

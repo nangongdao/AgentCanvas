@@ -67,7 +67,7 @@ class MarketplaceWorkflow(Base):
     # Relationships
     workflow: Mapped["Workflow"] = relationship(back_populates="marketplace_entry")
     author: Mapped["User"] = relationship(back_populates="published_workflows")
-    reviews: Mapped[list["WorkflowReview"]] = relationship(
+    reviews: Mapped[list["MarketplaceReview"]] = relationship(
         back_populates="marketplace_workflow", cascade="all, delete-orphan"
     )
 
@@ -79,10 +79,10 @@ class MarketplaceWorkflow(Base):
         )
 
 
-class WorkflowReview(Base):
+class MarketplaceReview(Base):
     """User review for a marketplace workflow."""
 
-    __tablename__ = "workflow_reviews"
+    __tablename__ = "marketplace_reviews"
 
     __table_args__ = (
         UniqueConstraint(
@@ -115,11 +115,11 @@ class WorkflowReview(Base):
     marketplace_workflow: Mapped[MarketplaceWorkflow] = relationship(
         back_populates="reviews"
     )
-    user: Mapped["User"] = relationship(back_populates="workflow_reviews")
+    user: Mapped["User"] = relationship(back_populates="marketplace_reviews")
 
     def __repr__(self) -> str:
         return (
-            f"<WorkflowReview(id={self.id!r}, "
+            f"<MarketplaceReview(id={self.id!r}, "
             f"rating={self.rating}, "
             f"user_id={self.user_id!r})>"
         )

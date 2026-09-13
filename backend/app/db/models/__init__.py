@@ -29,6 +29,7 @@ from app.db.models.knowledge import (
     KnowledgeBase,
     OnlineSource,
 )
+from app.db.models.marketplace import MarketplaceReview, MarketplaceWorkflow
 from app.db.models.mcp import McpServer
 from app.db.models.mcp_catalog import (
     McpCatalogEntry,
@@ -96,6 +97,8 @@ __all__ = [
     "McpCatalogVersion",
     "McpServer",
     "Membership",
+    "MarketplaceReview",
+    "MarketplaceWorkflow",
     "ModelConfig",
     "Organization",
     "OIDCIdentity",

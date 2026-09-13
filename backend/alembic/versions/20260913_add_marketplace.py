@@ -17,7 +17,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Create marketplace_workflows and workflow_reviews tables."""
+    """Create marketplace_workflows and marketplace_reviews tables."""
 
     # marketplace_workflows table
     op.create_table(
@@ -82,9 +82,9 @@ def upgrade() -> None:
         ["published_at"]
     )
 
-    # workflow_reviews table
+    # marketplace_reviews table
     op.create_table(
-        "workflow_reviews",
+        "marketplace_reviews",
         sa.Column("id", sa.String(), nullable=False),
         sa.Column("marketplace_workflow_id", sa.String(), nullable=False),
         sa.Column("user_id", sa.String(), nullable=False),
@@ -116,27 +116,27 @@ def upgrade() -> None:
         ),
     )
 
-    # Create index for workflow_reviews
+    # Create index for marketplace_reviews
     op.create_index(
-        "ix_workflow_reviews_marketplace_workflow_id",
-        "workflow_reviews",
+        "ix_marketplace_reviews_workflow_id",
+        "marketplace_reviews",
         ["marketplace_workflow_id"]
     )
     op.create_index(
-        "ix_workflow_reviews_created_at",
-        "workflow_reviews",
+        "ix_marketplace_reviews_created_at",
+        "marketplace_reviews",
         ["created_at"]
     )
 
 
 def downgrade() -> None:
     """Drop marketplace tables."""
-    op.drop_index("ix_workflow_reviews_created_at", table_name="workflow_reviews")
+    op.drop_index("ix_marketplace_reviews_created_at", table_name="marketplace_reviews")
     op.drop_index(
-        "ix_workflow_reviews_marketplace_workflow_id",
-        table_name="workflow_reviews"
+        "ix_marketplace_reviews_workflow_id",
+        table_name="marketplace_reviews"
     )
-    op.drop_table("workflow_reviews")
+    op.drop_table("marketplace_reviews")
 
     op.drop_index(
         "ix_marketplace_workflows_published_at",

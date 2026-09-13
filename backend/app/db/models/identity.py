@@ -48,7 +48,12 @@ class User(Base):
         "MarketplaceWorkflow", back_populates="author"
     )
     workflow_reviews: Mapped[list[Any]] = relationship(
-        "WorkflowReview", back_populates="user"
+        "WorkflowReview",
+        back_populates="user",
+        foreign_keys="WorkflowReview.requested_by_user_id",
+    )
+    marketplace_reviews: Mapped[list[Any]] = relationship(
+        "MarketplaceReview", back_populates="user"
     )
 
 
