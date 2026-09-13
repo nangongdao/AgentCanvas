@@ -9,6 +9,7 @@ import {
   Clock,
   Package,
   X,
+  CheckCircle2,
 } from "lucide-react";
 
 import { ApiError } from "@/api/client";
@@ -18,10 +19,6 @@ import {
 } from "@/api/endpoints/marketplace";
 import { cn } from "@/utils/cn";
 import { WorkflowDetailDialog } from "./WorkflowDetailDialog";
-
-interface Props {
-  onNotify: (message: string) => void;
-}
 
 type SortOption = "downloads" | "rating" | "recent";
 
@@ -38,10 +35,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function MarketplacePage({ onNotify }: Props) {
+export function MarketplacePage() {
   const [workflows, setWorkflows] = useState<MarketplaceWorkflowDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -49,6 +47,11 @@ export function MarketplacePage({ onNotify }: Props) {
   const [page, setPage] = useState(1);
   const [selectedWorkflow, setSelectedWorkflow] = useState<MarketplaceWorkflowDTO | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const showNotification = (message: string) => {
+    setNotification(message);
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -314,11 +317,19 @@ export function MarketplacePage({ onNotify }: Props) {
         </main>
       </div>
 
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border border-ok/40 bg-ok/10 px-4 py-3 text-sm text-ok shadow-card">
+          <CheckCircle2 size={16} />
+          <span>{notification}</span>
+        </div>
+      )}
+
       {selectedWorkflow && (
         <WorkflowDetailDialog
           workflowId={selectedWorkflow.id}
           onClose={() => setSelectedWorkflow(null)}
-          onNotify={onNotify}
+          onNotify={showNotification}
           onInstalled={() => {
             setSelectedWorkflow(null);
             void load();

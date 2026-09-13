@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Check,
   Cloud,
@@ -7,6 +8,7 @@ import {
   Save,
   TriangleAlert,
   Undo2,
+  Upload,
 } from "lucide-react";
 
 import { ExecutionHistory } from "@/features/execution/ExecutionHistory";
@@ -20,6 +22,7 @@ import type {
 } from "@/features/canvas/canvasLayout";
 import { WorkflowVariablesDialog } from "@/features/canvas/WorkflowVariablesDialog";
 import { McpManagerPanel } from "@/features/mcp/McpManagerPanel";
+import { PublishWorkflowDialog } from "@/features/marketplace/PublishWorkflowDialog";
 import { WorkflowTemplateGallery } from "@/features/templates/WorkflowTemplateGallery";
 import { CollaborationStatus } from "@/features/workflows/CollaborationStatus";
 import { WorkflowNavigator } from "@/features/workflows/WorkflowNavigator";
@@ -98,6 +101,8 @@ function SaveIndicator(props: Pick<Props, "dirty" | "saveState" | "workflowId">)
 }
 
 export function CanvasCommandBar(props: Props) {
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+
   return (
     <header role="toolbar" aria-label="工作流命令栏" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 lg:gap-3 lg:px-5">
       <WorkflowNavigator
@@ -217,6 +222,17 @@ export function CanvasCommandBar(props: Props) {
             onOpenWorkflow={props.onOpenWorkflow}
             onNotify={props.onNotify}
           />
+          {props.workflowId && props.canEdit && (
+            <button
+              type="button"
+              onClick={() => setPublishDialogOpen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-ink/80 px-2.5 text-xs text-ice transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
+              title="发布到市场"
+            >
+              <Upload size={13} />
+              <span className="hidden xl:inline">发布</span>
+            </button>
+          )}
           <WorkflowVersionPanel
             workflowId={props.workflowId}
             currentVersion={props.version}
@@ -283,6 +299,18 @@ export function CanvasCommandBar(props: Props) {
           )}
         </div>
       </div>
+
+      {publishDialogOpen && props.workflowId && (
+        <PublishWorkflowDialog
+          workflowId={props.workflowId}
+          workflowName={props.name}
+          onClose={() => setPublishDialogOpen(false)}
+          onNotify={props.onNotify}
+          onPublished={() => {
+            setPublishDialogOpen(false);
+          }}
+        />
+      )}
     </header>
   );
 }
