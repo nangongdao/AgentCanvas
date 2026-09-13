@@ -9,6 +9,7 @@ from app.core.secret_providers import SecretResolver
 from app.core.security import SecretBox
 from app.db.models import ModelConfig
 from app.providers import anthropic_provider as _anthropic  # noqa: F401
+from app.providers import cohere_provider as _cohere  # noqa: F401
 from app.providers import gemini_provider as _gemini  # noqa: F401
 from app.providers import mistral_provider as _mistral  # noqa: F401
 from app.providers import mock_provider as _mock  # noqa: F401
