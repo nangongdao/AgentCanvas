@@ -145,11 +145,32 @@
 
 ### 平台能力增强
 
-#### 工作流市场基础（5-7天）
-- 发布到市场功能
-- 市场发现页
-- 评分与评论系统
-- 依赖声明与兼容性检查
+#### ✅ 工作流市场基础（已完成）
+**目标**：实现工作流发布、发现、安装和评论功能
+
+**已完成**：
+- [x] 后端 REST API（6个端点）- commit 3341208
+  - POST /marketplace/publish - 发布工作流
+  - GET /marketplace/workflows - 浏览市场（分类/标签/排序/分页）
+  - GET /marketplace/workflows/{id} - 获取详情
+  - POST /marketplace/install/{id} - 克隆到用户工作空间
+  - POST /marketplace/workflows/{id}/reviews - 创建/更新评论
+  - GET /marketplace/workflows/{id}/reviews - 列出评论
+- [x] 数据库模型（MarketplaceWorkflow, WorkflowReview）
+- [x] 双向关系（Workflow ↔ MarketplaceWorkflow, User ↔ Reviews）
+- [x] 增量评分聚合算法
+- [x] 下载计数跟踪
+- [x] Alembic 迁移文件
+- 完成日期：2026-09-13
+
+**技术实现**：
+- 位置：`backend/app/api/routes/marketplace.py` (468行)
+- 模型：`backend/app/db/models/marketplace.py`
+- 迁移：`backend/alembic/versions/2a2231226aa0_merge_marketplace_and_evaluation_policy_.py`
+
+**待完成**：
+- [ ] 前端市场 UI 组件
+- [ ] 端到端测试
 
 #### ✅ TypeScript/JavaScript SDK（已完成）
 - [x] npm 包发布准备 - commit a87d94e
