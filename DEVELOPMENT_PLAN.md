@@ -289,21 +289,41 @@
 
 ## 下一步行动
 
-**立即开始**（今天）：
-1. 提交执行历史导出功能
-2. 开始实现 Mistral AI Provider
-3. 准备 CLI 工具目录结构
+**已完成的里程碑**（2026-09-13）：
+1. ✅ 执行历史导出功能（CSV + JSON）
+2. ✅ 5个新 Provider（Mistral, Cohere, Together, Bedrock, Azure OpenAI）
+3. ✅ 7个新 MCP 服务器（Git, GitHub, Jira, Slack, Email, Notion, Google Docs）
+4. ✅ CLI 工具 MVP（init, dev, migrate, backup）
+5. ✅ TypeScript SDK（npm ready）
+6. ✅ Python SDK（PyPI ready，质量门禁通过）
+7. ✅ 工作流市场后端（REST API + 数据库 + 测试）
+8. ✅ 开发环境优化（一键启动 + Dev Container + VS Code 调试配置）
 
-**本周内**：
-1. 完成 2 个 Provider（Mistral AI + Cohere）
-2. CLI 工具 MVP 完成
-3. Git MCP 服务器实现
+**下一阶段优先级**：
 
-**下周**：
-1. 继续 Provider 扩展（Together AI）
-2. GitHub/Slack MCP 实现
-3. 开始 TypeScript SDK 开发
+**第一优先级 - 桌面端交付**：
+1. 等待 CI 构建 Windows 安装包（desktop-build-windows job）
+2. 在干净 Windows 机器执行 C9-1 验收清单（14项）
+3. 记录性能指标（首启时间、安装包体积）
+
+**第二优先级 - 市场前端实现**（3-5天）：
+1. 市场浏览页面 UI（MarketplaceBrowser.tsx）
+2. 工作流详情页（WorkflowDetail.tsx）
+3. 发布工作流表单（PublishWorkflowDialog.tsx）
+4. 评分与评论组件（ReviewSection.tsx）
+5. 端到端测试（marketplace-workflow.spec.ts）
+
+**第三优先级 - 分布式执行验收**：
+1. I1 Phase 8 真实 Redis Streams 测试
+2. Docker 故障注入测试
+3. 外部触发端到端验收（C1）
+
+**技术债务**：
+1. 依赖兼容性检查器实现（marketplace dependency checker）
+2. LangGraph 2.x 迁移准备
+3. 存储抽象层统一（Repository 模式）
 
 ---
 
 *本计划将根据实际进展和反馈持续更新*
+*最后更新：2026-09-13*
