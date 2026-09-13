@@ -15,6 +15,7 @@ from app.providers import mistral_provider as _mistral  # noqa: F401
 from app.providers import mock_provider as _mock  # noqa: F401
 from app.providers import ollama_provider as _ollama  # noqa: F401
 from app.providers import openai_provider as _openai  # noqa: F401
+from app.providers import together_provider as _together  # noqa: F401
 from app.providers.base import (
     COPILOT_PROMPT_MARKER,
     PROVIDERS,
