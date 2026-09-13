@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -98,8 +98,8 @@ class AgentCanvasClient:
         self,
         method: str,
         endpoint: str,
-        json: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None,
+        json: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
     ) -> Any:
         """Make an HTTP request to the API.
 
@@ -136,7 +136,7 @@ class AgentCanvasClient:
 
     # ==================== Workflow Methods ====================
 
-    def list_workflows(self, params: PaginationParams | None = None) -> list[Workflow]:
+    def list_workflows(self, params: Optional[PaginationParams] = None) -> list[Workflow]:
         """List all workflows with optional pagination.
 
         Args:
@@ -208,7 +208,7 @@ class AgentCanvasClient:
 
     # ==================== Execution Methods ====================
 
-    def list_executions(self, params: PaginationParams | None = None) -> list[Execution]:
+    def list_executions(self, params: Optional[PaginationParams] = None) -> list[Execution]:
         """List all executions with optional pagination.
 
         Args:

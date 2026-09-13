@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 
 class AgentCanvasError(Exception):
     """Base exception for all AgentCanvas SDK errors."""
 
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(self, message: str, status_code: Optional[int] = None) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
