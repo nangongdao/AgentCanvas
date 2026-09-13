@@ -13,6 +13,7 @@ from app.api.routes import (
     evaluations,
     executions,
     knowledge,
+    marketplace,
     mcp,
     mcp_catalog,
     mcp_catalog_rollout,
@@ -67,6 +68,7 @@ api_router.include_router(project_quotas.router)
 api_router.include_router(search.router)
 api_router.include_router(service_accounts.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(marketplace.router)
 api_router.include_router(mcp.router)
 api_router.include_router(mcp_catalog.router)
 api_router.include_router(mcp_catalog_rollout.router)

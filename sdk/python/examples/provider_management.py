@@ -65,8 +65,7 @@ def main() -> None:
                 models=["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview"]
             ),
         )
-        print("✓ Provider updated")
-        print(f"  New models: {', '.join(updated.models)}")
+        print(f"✓ Provider updated - New models: {', '.join(updated.models)}")
 
         # 6. Delete providers
         print(f"\nDeleting provider {openai_provider.id}...")

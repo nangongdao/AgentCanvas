@@ -73,7 +73,7 @@ def main() -> None:
         print("\n5. Generic error handling pattern...")
         try:
             # Some operation that might fail
-            client.get_workflow("some-id")
+            _ = client.get_workflow("some-id")
         except NotFoundError:
             print("✓ Resource not found - creating new one")
         except AuthenticationError:
@@ -96,7 +96,7 @@ def main() -> None:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                client.list_workflows()
+                _ = client.list_workflows()
                 print(f"✓ Success on attempt {attempt + 1}")
                 break
             except (TimeoutError, ServerError) as e:
