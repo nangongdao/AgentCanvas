@@ -170,6 +170,69 @@ async def publish_workflow(
     )
 
 
+# ==================== Update Published Workflow ====================
+
+
+@router.put("/publish/{marketplace_id}", response_model=MarketplaceWorkflowResponse)
+async def update_published_workflow(
+    marketplace_id: str,
+    metadata: PublishMetadata,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MarketplaceWorkflowResponse:
+    """Update an already published workflow in the marketplace."""
+
+    # 1. Get existing marketplace workflow
+    result = await db.execute(
+        select(MarketplaceWorkflow).where(MarketplaceWorkflow.id == marketplace_id)
+    )
+    marketplace_workflow = result.scalar_one_or_none()
+
+    if not marketplace_workflow:
+        raise HTTPException(status_code=404, detail="Marketplace workflow not found")
+
+    # 2. Check ownership
+    if marketplace_workflow.author_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Only the author can update this workflow"
+        )
+
+    # 3. Update metadata
+    marketplace_workflow.display_name = metadata.display_name
+    marketplace_workflow.description = metadata.description
+    marketplace_workflow.category = metadata.category
+    marketplace_workflow.tags = metadata.tags
+    marketplace_workflow.icon_url = metadata.icon_url
+    marketplace_workflow.version = metadata.version
+    marketplace_workflow.changelog = metadata.changelog
+    marketplace_workflow.dependencies = metadata.dependencies
+    marketplace_workflow.updated_at = datetime.now(UTC)
+
+    await db.commit()
+    await db.refresh(marketplace_workflow)
+
+    return MarketplaceWorkflowResponse(
+        id=marketplace_workflow.id,
+        workflow_id=marketplace_workflow.workflow_id,
+        author_id=marketplace_workflow.author_id,
+        author_name=current_user.display_name or current_user.email,
+        display_name=marketplace_workflow.display_name,
+        description=marketplace_workflow.description,
+        category=marketplace_workflow.category,
+        tags=marketplace_workflow.tags,
+        icon_url=marketplace_workflow.icon_url,
+        version=marketplace_workflow.version,
+        changelog=marketplace_workflow.changelog,
+        dependencies=marketplace_workflow.dependencies,
+        downloads=marketplace_workflow.downloads,
+        rating=marketplace_workflow.rating,
+        rating_count=marketplace_workflow.rating_count,
+        status=marketplace_workflow.status,
+        published_at=marketplace_workflow.published_at,
+        updated_at=marketplace_workflow.updated_at,
+    )
+
+
 # ==================== List Marketplace Workflows ====================
 
 
@@ -178,6 +241,7 @@ async def list_marketplace_workflows(
     db: Annotated[AsyncSession, Depends(get_db)],
     category: str | None = None,
     tags: list[str] = Query(default_factory=list),
+    search: str | None = None,
     sort_by: str = "downloads",  # downloads, rating, recent
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -198,6 +262,16 @@ async def list_marketplace_workflows(
         # SQLite: JSON filtering (less efficient)
         for tag in tags:
             query = query.where(MarketplaceWorkflow.tags.contains([tag]))
+
+    # Search by display name, description, or author name
+    if search and search.strip():
+        search_term = f"%{search.strip().lower()}%"
+        query = query.where(
+            (MarketplaceWorkflow.display_name.ilike(search_term))
+            | (MarketplaceWorkflow.description.ilike(search_term))
+            | (User.display_name.ilike(search_term))
+            | (User.email.ilike(search_term))
+        )
 
     # Sort
     if sort_by == "rating":

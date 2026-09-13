@@ -4,7 +4,6 @@ import { Loader2, Package, X, Upload } from "lucide-react";
 
 import { ApiError } from "@/api/client";
 import { publishWorkflow, type PublishMetadata } from "@/api/endpoints/marketplace";
-import { cn } from "@/utils/cn";
 
 interface Props {
   workflowId: string;
@@ -47,11 +46,80 @@ export function PublishWorkflowDialog({
   const [changelog, setChangelog] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // Validate inputs
+  const validateInputs = (): string | null => {
+    // Validate display name
+    if (!displayName.trim() || displayName.trim().length > 255) {
+      return "显示名称必须在1-255个字符之间";
+    }
+
+    // Validate description
+    if (!description.trim()) {
+      return "描述不能为空";
+    }
+
+    // Validate tags
+    const tagArray = tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (tagArray.length > 10) {
+      return "标签数量不能超过10个";
+    }
+
+    for (const tag of tagArray) {
+      if (tag.length > 50) {
+        return `标签"${tag}"过长，单个标签不能超过50个字符`;
+      }
+      if (!/^[\w一-龥\s-]+$/.test(tag)) {
+        return `标签"${tag}"包含非法字符，只允许字母、数字、中文、空格和连字符`;
+      }
+    }
+
+    // Validate version (semantic versioning)
+    if (!/^\d+\.\d+\.\d+$/.test(version.trim())) {
+      return "版本号必须符合语义化版本格式（如：1.0.0）";
+    }
+
+    // Validate icon URL if provided
+    if (iconUrl.trim()) {
+      try {
+        const url = new URL(iconUrl.trim());
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          return "图标URL必须使用http或https协议";
+        }
+        if (iconUrl.trim().length > 512) {
+          return "图标URL长度不能超过512个字符";
+        }
+      } catch {
+        return "图标URL格式不正确";
+      }
+    }
+
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate inputs
+    const validationError = validateInputs();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    // Show confirmation dialog
+    setShowConfirm(true);
+  };
+
+  const handleConfirmPublish = async () => {
     setPublishing(true);
     setError(null);
+    setShowConfirm(false);
 
     try {
       const metadata: PublishMetadata = {
@@ -65,6 +133,7 @@ export function PublishWorkflowDialog({
         version: version.trim(),
         changelog: changelog.trim() || undefined,
         icon_url: iconUrl.trim() || undefined,
+        // TODO: Extract actual dependencies from workflow DSL
         dependencies: {},
       };
 
@@ -182,7 +251,7 @@ export function PublishWorkflowDialog({
                 placeholder="用逗号分隔，例如：AI, 自动化, 数据处理"
                 className="h-9 w-full rounded-md border border-line bg-ink/50 px-3 text-sm text-ice placeholder-ghost focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
-              <p className="mt-1 text-[10px] text-ghost">用逗号分隔多个标签</p>
+              <p className="mt-1 text-[10px] text-ghost">用逗号分隔多个标签（最多10个，每个不超过50字符）</p>
             </div>
 
             {/* Version */}
@@ -261,6 +330,43 @@ export function PublishWorkflowDialog({
           </button>
         </footer>
       </form>
+
+      {/* Confirmation Dialog */}
+      {showConfirm && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-void/60 backdrop-blur-xs">
+          <div className="glass w-full max-w-md rounded-lg border border-line p-6 shadow-card">
+            <h3 className="mb-3 text-base font-semibold text-ice">确认发布</h3>
+            <p className="mb-6 text-sm text-fog">
+              发布后，工作流将对所有用户可见。确定要发布到市场吗？
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                disabled={publishing}
+                className="rounded-md border border-line px-4 py-2 text-sm text-fog transition hover:bg-ink/50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPublish}
+                disabled={publishing}
+                className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-void transition hover:bg-accent/90 disabled:opacity-50"
+              >
+                {publishing ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    发布中...
+                  </>
+                ) : (
+                  "确认发布"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   );

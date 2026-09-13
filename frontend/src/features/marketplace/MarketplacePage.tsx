@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Clock,
   Package,
-  X,
   CheckCircle2,
 } from "lucide-react";
 
@@ -41,6 +40,7 @@ export function MarketplacePage() {
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("downloads");
@@ -50,8 +50,23 @@ export function MarketplacePage() {
 
   const showNotification = (message: string) => {
     setNotification(message);
-    setTimeout(() => setNotification(null), 3000);
   };
+
+  // Auto-dismiss notification after 3 seconds with cleanup
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(() => setNotification(null), 3000);
+    return () => clearTimeout(timer);
+  }, [notification]);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1); // Reset to first page on search
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +75,7 @@ export function MarketplacePage() {
       const result = await listMarketplaceWorkflows({
         category: selectedCategory || undefined,
         tags: selectedTags,
+        search: debouncedSearch.trim() || undefined,
         sortBy,
         page,
         pageSize: 20,
@@ -70,7 +86,7 @@ export function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, selectedTags, sortBy, page]);
+  }, [selectedCategory, selectedTags, debouncedSearch, sortBy, page]);
 
   useEffect(() => {
     void load();
@@ -86,16 +102,20 @@ export function MarketplacePage() {
     return Array.from(tags).sort();
   }, [workflows]);
 
-  const filteredWorkflows = useMemo(() => {
-    if (!searchQuery.trim()) return workflows;
-    const q = searchQuery.toLowerCase();
-    return workflows.filter(
-      (w) =>
-        w.display_name.toLowerCase().includes(q) ||
-        w.description.toLowerCase().includes(q) ||
-        w.author_name.toLowerCase().includes(q),
-    );
-  }, [workflows, searchQuery]);
+  // Validate and sanitize icon URL to prevent XSS
+  const getSafeIconUrl = (url: string | null): string | null => {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url);
+      // Only allow http/https protocols
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return null;
+      }
+      return url;
+    } catch {
+      return null;
+    }
+  };
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -253,14 +273,14 @@ export function MarketplacePage() {
               <div className="flex h-64 items-center justify-center">
                 <Loader2 size={20} className="animate-spin text-accent" />
               </div>
-            ) : filteredWorkflows.length === 0 ? (
+            ) : workflows.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center text-center">
                 <Package size={32} className="mb-3 text-ghost" />
                 <p className="text-sm text-fog">暂无工作流</p>
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredWorkflows.map((workflow) => (
+                {workflows.map((workflow) => (
                   <button
                     key={workflow.id}
                     type="button"
@@ -268,9 +288,9 @@ export function MarketplacePage() {
                     className="group flex flex-col gap-3 rounded-lg border border-line bg-ink/40 p-4 text-left transition hover:border-accent/50 hover:bg-ink/60"
                   >
                     <div className="flex items-start gap-3">
-                      {workflow.icon_url ? (
+                      {getSafeIconUrl(workflow.icon_url) ? (
                         <img
-                          src={workflow.icon_url}
+                          src={getSafeIconUrl(workflow.icon_url)!}
                           alt=""
                           className="h-10 w-10 shrink-0 rounded-lg border border-line object-cover"
                         />
