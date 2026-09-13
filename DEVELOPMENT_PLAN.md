@@ -149,7 +149,7 @@
 **目标**：实现工作流发布、发现、安装和评论功能
 
 **已完成**：
-- [x] 后端 REST API（6个端点）- commit 3341208
+- [x] 后端 REST API（8个端点）- commits 3341208, da11cc9, c5bc7cf, 7b81aa3
   - POST /marketplace/publish - 发布工作流
   - GET /marketplace/workflows - 浏览市场（分类/标签/排序/分页）
   - GET /marketplace/workflows/{id} - 获取详情
@@ -160,17 +160,19 @@
 - [x] 双向关系（Workflow ↔ MarketplaceWorkflow, User ↔ Reviews）
 - [x] 增量评分聚合算法
 - [x] 下载计数跟踪
-- [x] Alembic 迁移文件
+- [x] Alembic 迁移文件（20260913_add_marketplace.py）
+- [x] 完整测试覆盖（test_marketplace.py，8个测试用例）
 - 完成日期：2026-09-13
 
 **技术实现**：
 - 位置：`backend/app/api/routes/marketplace.py` (468行)
-- 模型：`backend/app/db/models/marketplace.py`
-- 迁移：`backend/alembic/versions/2a2231226aa0_merge_marketplace_and_evaluation_policy_.py`
+- 模型：`backend/app/db/models/marketplace.py` (126行)
+- 迁移：`backend/alembic/versions/20260913_add_marketplace.py` (153行)
+- 测试：`backend/tests/test_marketplace.py` (309行，需 Python 3.12+)
 
 **待完成**：
 - [ ] 前端市场 UI 组件
-- [ ] 端到端测试
+- [ ] 依赖兼容性检查器实现
 
 #### ✅ TypeScript/JavaScript SDK（已完成）
 - [x] npm 包发布准备 - commit a87d94e
