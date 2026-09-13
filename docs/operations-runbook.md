@@ -272,3 +272,50 @@ Do not configure localhost, private, link-local, reserved, or metadata-service
 addresses. The API rejects explicit non-public IPs and the dispatcher checks all
 DNS answers again immediately before sending. Callback URLs do not follow
 redirects and do not inherit process proxy settings.
+
+## 9. Desktop (Tauri) troubleshooting (C9)
+
+The desktop shell starts a packaged backend sidecar on a per-launch loopback
+port and stores user data outside the install directory. Nothing below
+applies to the containerized Web deployment.
+
+### Startup fails or the splash shows an error
+
+- The splash lists each `/readyz` check (database, migrations, checkpointer,
+  config, vector store, sandbox) with its state; the first row that is not
+  `ready` is the blocker.
+- Full sidecar output — uvicorn logs, migration progress, tracebacks — is
+  appended to `<data>/logs/sidecar.log`, and the failure surface prints the
+  exact path. Copy the diagnostics button captures the error plus that path.
+- A sidecar that exits before readiness fails the wait immediately (exit
+  code shown); migration failures are the common cause. Inspect the log for
+  the alembic revision that failed.
+
+### Where data lives
+
+- Windows: `%APPDATA%\AgentCanvas` (injected as `APP_DATA_DIR`). Everything
+  derives from it: `app.db`, `checkpoints.db`, the SQL vector store,
+  `uploads/`, `logs/`, and the local encryption key.
+- Resetting the app = closing it and deleting that directory; there is no
+  server-side state. Back it up first — the key file re-encrypts nothing:
+  a deleted `.agentcanvas.key` makes existing encrypted MCP/model secrets
+  unreadable and they must be re-entered.
+
+### Ports and conflicts
+
+- The shell reserves a free loopback port per launch and passes it to the
+  sidecar; a conflict with a dev server on 8000 is therefore impossible.
+  `AGENTCANVAS_BACKEND_URL=http://127.0.0.1:8000` reuses an already-running
+  uvicorn instead of spawning one (development mode).
+- A second double-click focuses the existing window; it never starts a
+  second backend. Orphan sidecars cannot survive the shell: the child runs
+  inside a Windows job object with kill-on-close plus an explicit kill on
+  drop — verify with `tasklist` filtered on `agentcanvas-backend` if unsure.
+
+### Fonts and offline use
+
+- All fonts ship inside the app (`public/fonts`, OFL licenses included);
+  first paint and offline startup never contact a font CDN. If text renders
+  in a system fallback after an upgrade, a new UI string may have introduced
+  characters outside the subset — regenerate `noto-sans-sc-subset.woff2`
+  with the charset sweep described in `frontend/src/index.css`.

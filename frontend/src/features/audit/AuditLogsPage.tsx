@@ -15,8 +15,9 @@ import {
   type AuditLogQuery,
   listAuditLogs,
 } from "@/api/endpoints/auditLogs";
-import { AuditLogRow, ACTION_LABEL } from "@/features/audit/AuditLogRow";
+import { AUDIT_ACTIONS, AuditLogRow, actionLabel } from "@/features/audit/AuditLogRow";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useT } from "@/features/i18n/i18n";
 
 interface Filters {
   search: string;
@@ -69,6 +70,7 @@ function queryFor(filters: Filters, cursor?: string): AuditLogQuery {
 }
 
 export function AuditLogsPage() {
+  const t = useT();
   const { ready, can } = useAuth();
   const canAdmin = can("admin");
   const [draft, setDraft] = useState<Filters>(EMPTY_FILTERS);
@@ -88,11 +90,11 @@ export function AuditLogsPage() {
       setEntries(page.items);
       setNextCursor(page.next_cursor);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载审计日志失败");
+      setError(err instanceof Error ? err.message : t("audit.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [canAdmin, filters]);
+  }, [canAdmin, filters, t]);
 
   useEffect(() => {
     if (ready) void reload();
@@ -119,24 +121,24 @@ export function AuditLogsPage() {
       setEntries((current) => [...current, ...page.items]);
       setNextCursor(page.next_cursor);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载更多审计日志失败");
+      setError(err instanceof Error ? err.message : t("audit.loadMoreFailed"));
     } finally {
       setLoadingMore(false);
     }
   };
 
   return (
-    <div className="ambient-stage flex h-full w-full flex-col bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full flex-col text-ice">
       <header role="presentation" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="flex h-8 w-8 items-center justify-center text-warn">
           <ScrollText size={18} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
-            AgentCanvas Audit Log
+          <h1 className="workspace-page-title">
+            {t("audit.title")}
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">
-            actor / action / resource / scope
+            {t("audit.eyebrow")}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
@@ -145,7 +147,7 @@ export function AuditLogsPage() {
             onClick={() => void reload()}
             disabled={loading || !canAdmin}
             className="flex h-8 w-8 items-center justify-center rounded-md text-ghost transition hover:bg-line hover:text-pulse disabled:opacity-40"
-            title="刷新"
+            title={t("audit.refresh")}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
           </button>
@@ -161,7 +163,7 @@ export function AuditLogsPage() {
             onClick={() => setError(null)}
             className="h-7 rounded-md px-2 font-mono text-[9px] uppercase hover:bg-bad/10"
           >
-            dismiss
+            {t("audit.dismiss")}
           </button>
         </div>
       )}
@@ -172,7 +174,7 @@ export function AuditLogsPage() {
           className="grid shrink-0 gap-2 border-b border-line bg-ink/45 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.5fr)_repeat(5,minmax(8rem,1fr))_auto] lg:px-5"
         >
           <label className="relative min-w-0">
-            <span className="sr-only">搜索审计日志</span>
+            <span className="sr-only">{t("audit.searchLabel")}</span>
             <Search
               size={13}
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ghost/55"
@@ -180,48 +182,48 @@ export function AuditLogsPage() {
             <input
               value={draft.search}
               onChange={(event) => setDraft({ ...draft, search: event.target.value })}
-              placeholder="主体、动作、资源"
+              placeholder={t("audit.searchPlaceholder")}
               className="field-input h-8 py-0 pl-8"
             />
           </label>
           <select
-            aria-label="动作筛选"
+            aria-label={t("audit.actionFilter")}
             value={draft.action}
             onChange={(event) => setDraft({ ...draft, action: event.target.value })}
             className="field-input h-8 py-0"
           >
-            <option value="">全部动作</option>
-            {Object.entries(ACTION_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            <option value="">{t("audit.allActions")}</option>
+            {AUDIT_ACTIONS.map((value) => (
+              <option key={value} value={value}>{actionLabel(value, t)}</option>
             ))}
           </select>
           <select
-            aria-label="资源类型筛选"
+            aria-label={t("audit.resourceFilter")}
             value={draft.resourceType}
             onChange={(event) => setDraft({ ...draft, resourceType: event.target.value })}
             className="field-input h-8 py-0"
           >
-            <option value="">全部资源</option>
+            <option value="">{t("audit.allResources")}</option>
             {RESOURCE_TYPES.map((value) => (
               <option key={value} value={value}>{value}</option>
             ))}
           </select>
           <input
-            aria-label="主体标识筛选"
+            aria-label={t("audit.actorFilter")}
             value={draft.actorKey}
             onChange={(event) => setDraft({ ...draft, actorKey: event.target.value })}
             placeholder="actor key"
             className="field-input h-8 py-0"
           />
           <input
-            aria-label="组织标识筛选"
+            aria-label={t("audit.orgFilter")}
             value={draft.organizationId}
             onChange={(event) => setDraft({ ...draft, organizationId: event.target.value })}
             placeholder="organization id"
             className="field-input h-8 py-0"
           />
           <input
-            aria-label="项目标识筛选"
+            aria-label={t("audit.projectFilter")}
             value={draft.projectId}
             onChange={(event) => setDraft({ ...draft, projectId: event.target.value })}
             placeholder="project id"
@@ -232,7 +234,7 @@ export function AuditLogsPage() {
               type="button"
               onClick={resetFilters}
               className="flex h-8 w-8 items-center justify-center rounded-md text-ghost transition hover:bg-line hover:text-ice"
-              title="清除筛选"
+              title={t("audit.clearFilters")}
             >
               <RotateCcw size={13} />
             </button>
@@ -241,28 +243,28 @@ export function AuditLogsPage() {
               className="flex h-8 items-center gap-1.5 rounded-md bg-pulse px-3 text-xs font-semibold text-void transition hover:brightness-110"
             >
               <Filter size={13} />
-              筛选
+              {t("audit.apply")}
             </button>
           </div>
         </form>
 
         <div className="hidden shrink-0 grid-cols-[10.5rem_minmax(10rem,1fr)_minmax(12rem,1.35fr)_minmax(14rem,1.7fr)] border-b border-line bg-void/70 px-4 py-2 font-mono text-[9px] uppercase text-ghost/50 lg:grid">
-          <span>time / event</span>
-          <span>actor</span>
-          <span>action / resource</span>
-          <span>scope / metadata</span>
+          <span>{t("audit.col.time")}</span>
+          <span>{t("audit.col.actor")}</span>
+          <span>{t("audit.col.action")}</span>
+          <span>{t("audit.col.scope")}</span>
         </div>
 
-        <section aria-label="审计事件" className="min-h-0 flex-1 overflow-auto">
+        <section aria-label={t("audit.eventsAria")} tabIndex={0} className="min-h-0 flex-1 overflow-auto">
           {loading && entries.length === 0 ? (
             <div className="flex h-32 items-center justify-center gap-2 text-ghost/60">
               <Loader2 size={14} className="animate-spin" />
-              <span className="text-xs">加载审计日志…</span>
+              <span className="text-xs">{t("audit.loading")}</span>
             </div>
           ) : entries.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center gap-2 text-center text-ghost/50">
               <ScrollText size={22} />
-              <p className="text-xs">当前筛选条件下没有审计事件</p>
+              <p className="text-xs">{t("audit.empty")}</p>
             </div>
           ) : (
             <div className="mx-auto max-w-[110rem]">
@@ -276,7 +278,7 @@ export function AuditLogsPage() {
                     className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-ink/80 px-3 text-xs text-ice transition hover:border-ghost/50 hover:bg-line/60 disabled:opacity-40"
                   >
                     {loadingMore && <Loader2 size={13} className="animate-spin" />}
-                    {loadingMore ? "加载中…" : "加载更多"}
+                    {loadingMore ? t("audit.loadingMore") : t("audit.loadMore")}
                   </button>
                 </div>
               )}

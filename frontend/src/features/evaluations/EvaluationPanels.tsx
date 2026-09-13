@@ -29,7 +29,10 @@ export function DatasetSidebar(props: {
   onCreate: () => void;
 }) {
   return (
-    <aside className="glass flex max-h-56 w-full shrink-0 flex-col border-b border-line md:max-h-none md:w-64 md:border-b-0 md:border-r">
+    <aside
+      aria-label="数据集列表"
+      className="glass flex max-h-56 w-full shrink-0 flex-col border-b border-line md:max-h-none md:w-64 md:border-b-0 md:border-r"
+    >
       <div className="flex h-11 items-center justify-between border-b border-line px-3">
         <span className="font-mono text-[9px] uppercase text-ghost/60">Datasets / {props.rows.length}</span>
         {props.canEdit && <button type="button" onClick={props.onCreate} className="flex h-7 w-7 items-center justify-center text-ghost hover:text-pulse" title="新建数据集"><Plus size={14} /></button>}
@@ -103,7 +106,10 @@ export function EvaluationReportPanel(props: {
 }) {
   const comparisonMode = props.mode === "comparisons";
   return (
-    <aside className="glass flex max-h-[48vh] min-h-64 w-full shrink-0 flex-col border-t border-line xl:max-h-none xl:w-96 xl:border-l xl:border-t-0">
+    <aside
+      aria-label="评测报告列表"
+      className="glass flex max-h-[48vh] min-h-64 w-full shrink-0 flex-col border-t border-line xl:max-h-none xl:w-96 xl:border-l xl:border-t-0"
+    >
       <div className="flex h-11 items-center gap-2 border-b border-line px-3">
         <FlaskConical size={13} className="text-volt" />
         <div className="flex rounded-md border border-line bg-void/50 p-0.5">

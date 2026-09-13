@@ -87,13 +87,13 @@ export function McpCatalogPage() {
   if (ready && authenticated && !canAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="ambient-stage flex h-full w-full min-w-0 flex-col overflow-x-hidden bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full min-w-0 flex-col overflow-x-hidden text-ice">
       <header role="presentation" className="glass relative z-20 flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-pulse/30 bg-pulse/10 text-pulse">
           <Cable size={16} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">MCP Catalog Control</h1>
+          <h1 className="workspace-page-title">MCP Catalog Control</h1>
           <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-ghost/50">
             approved manifests / diff / controlled rollout
           </p>

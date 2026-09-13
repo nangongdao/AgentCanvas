@@ -81,6 +81,7 @@ async def run_tool_loop(
             tools=schemas,
             params=params,
             node_id=node.id,
+            load_balance=cfg.load_balance,
         )
         if result.usage is not None:
             usage = {
@@ -160,5 +161,6 @@ async def run_tool_loop(
         required_capabilities=required_agent_capabilities(cfg),
         params=params,
         node_id=node.id,
+        load_balance=cfg.load_balance,
     )
     return final.content, usage, trace

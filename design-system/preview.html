@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN" data-page-node-id="eoWsNQ4mKfahBTYpeNdFsR">
+  <head data-page-node-id="t95TexLXn4zB8G68WwAfJb">
+    <meta charset="UTF-8" data-page-node-id="xsi6PcCGrOkIcWcCSUkOUA" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="gQdPwYg47ViVFPh8RqXafP" />
+    <title>AgentCanvas — Design System Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" data-page-node-id="BIPn7oVo1vAvZh9ItxW8pr" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin data-page-node-id="Dz62EbmBgwH5C2baptgIkF" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet" data-page-node-id="d0Hyo0EePb8DW54JPBrjf5"
+    />
+    <style>
+      /* ---------------------------------------------------------------
+         This page mirrors frontend/src/index.css exactly. If a token here
+         drifts from the app, DESIGN.md is the tie-breaker.
+         --------------------------------------------------------------- */
+      :root {
+        --void: #060810;
+        --ink: #0b0e1c;
+        --raise: #161c30;
+        --line: #1e2440;
+        --line-soft: #14182a;
+        --line-strong: #2c3450;
+        --ghost: #909ab2;
+        --ice: #eaeefb;
+        --accent-pulse: #22d3ee;
+        --accent-volt: #8b5cf6;
+        --accent-ok: #34d399;
+        --accent-bad: #fb7185;
+        --accent-warn: #fbbf24;
+        --chrome-bg: rgba(9, 11, 23, 0.72);
+        --chrome-blur: blur(14px) saturate(150%);
+        --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0) 54%);
+        --inset-well: inset 0 1px 2px rgba(2, 3, 10, 0.45);
+        --elev-1: 0 1px 2px -1px rgba(2, 3, 10, 0.5);
+        --elev-2: 0 1px 1px rgba(2, 3, 10, 0.3), 0 2px 4px -2px rgba(2, 3, 10, 0.4),
+          0 12px 28px -16px rgba(2, 3, 10, 0.62);
+        --elev-3: 0 2px 6px -2px rgba(2, 3, 10, 0.46), 0 16px 36px -16px rgba(2, 3, 10, 0.64);
+        --elev-4: 0 1px 1px rgba(2, 3, 10, 0.34), 0 12px 24px -8px rgba(2, 3, 10, 0.5),
+          0 36px 72px -24px rgba(2, 3, 10, 0.72);
+        --stage-layers:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E"),
+          radial-gradient(1100px 620px at 6% -14%, rgba(34, 211, 238, 0.11), transparent 62%),
+          radial-gradient(900px 560px at 104% 0%, rgba(139, 92, 246, 0.1), transparent 64%),
+          radial-gradient(1400px 720px at 46% 120%, rgba(34, 211, 238, 0.06), transparent 66%);
+        --stage-repeat: repeat, no-repeat, no-repeat, no-repeat;
+        --stage-size: 200px 200px, auto, auto, auto;
+        --stage-blend: overlay, normal, normal, normal;
+        --duration-fast: 120ms;
+        --duration-base: 180ms;
+        --duration-slow: 280ms;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+        --radius-badge: 6px;
+        --radius-tile: 8px;
+        --radius-field: 8px;
+        --radius-panel: 12px;
+        --tracking-display: -0.018em;
+        --tracking-title: -0.006em;
+        --tracking-label: 0.08em;
+        --font-sans: 'Noto Sans SC', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        color-scheme: dark;
+      }
+      [data-theme='light'] {
+        --void: #f6f8fb;
+        --ink: #ffffff;
+        --raise: #eef1f8;
+        --line: #e1e6ef;
+        --ghost: #3f4654;
+        --ice: #161c2a;
+        --accent-pulse: #155e75;
+        --accent-volt: #6d28d9;
+        --accent-ok: #065f46;
+        --accent-bad: #9f1239;
+        --accent-warn: #92400e;
+        --elev-1: 0 1px 2px -1px rgba(16, 24, 40, 0.08);
+        --elev-2: 0 1px 1px rgba(16, 24, 40, 0.04), 0 2px 4px -2px rgba(16, 24, 40, 0.06),
+          0 10px 24px -16px rgba(16, 24, 40, 0.18);
+        --elev-3: 0 2px 6px -3px rgba(16, 24, 40, 0.08), 0 14px 32px -16px rgba(16, 24, 40, 0.2);
+        --elev-4: 0 1px 1px rgba(16, 24, 40, 0.05), 0 12px 24px -8px rgba(16, 24, 40, 0.12),
+          0 36px 64px -24px rgba(16, 24, 40, 0.22);
+        /* Light neutralises every material layer: a white panel already reads
+           as a lit surface, so the sheen, the aurora and the grain would only
+           dirty it. */
+        --line-soft: #eef1f7;
+        --line-strong: #d3dae6;
+        --chrome-bg: rgba(255, 255, 255, 0.82);
+        --sheen: none;
+        --inset-well: inset 0 1px 2px rgba(16, 24, 40, 0.06);
+        --stage-layers: none;
+        --stage-repeat: no-repeat;
+        --stage-size: auto;
+        --stage-blend: normal;
+        color-scheme: light;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        font-family: var(--font-sans);
+        /* Same single composited backdrop as the app shell. */
+        background-color: var(--void);
+        background-image: var(--stage-layers);
+        background-repeat: var(--stage-repeat);
+        background-size: var(--stage-size);
+        background-blend-mode: var(--stage-blend);
+        background-attachment: fixed;
+        color: var(--ice);
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.6;
+      }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+
+      .topbar {
+        display: flex; align-items: center; gap: 16px;
+        padding-bottom: 24px; margin-bottom: 40px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: var(--tracking-title); }
+      .brand-mark {
+        position: relative; display: grid; place-items: center; width: 28px; height: 28px;
+        border: 1px solid color-mix(in srgb, var(--accent-pulse) 24%, transparent);
+        border-radius: var(--radius-tile);
+        background: color-mix(in srgb, var(--accent-pulse) 8%, transparent);
+        color: var(--accent-pulse);
+      }
+      .brand-mark::after {
+        content: ''; position: absolute; width: 4px; height: 4px; border-radius: 999px; background: var(--accent-pulse);
+      }
+      .topbar .spacer { flex: 1; }
+
+      h1 { font-size: 30px; font-weight: 600; letter-spacing: var(--tracking-display); margin: 0 0 8px; }
+      .lede { margin: 0; color: var(--ghost); font-size: 13px; max-width: 60ch; }
+
+      section { margin-top: 56px; }
+      .eyebrow {
+        font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+        letter-spacing: var(--tracking-label); text-transform: uppercase;
+        color: var(--ghost); display: flex; align-items: center; gap: 10px; margin: 0 0 6px;
+      }
+      .eyebrow::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+      h2 { font-size: 13px; font-weight: 600; letter-spacing: var(--tracking-title); margin: 0 0 20px; }
+      .note { font-size: 12px; color: var(--ghost); margin: -8px 0 20px; max-width: 70ch; }
+
+      .grid { display: grid; gap: 16px; }
+      .g2 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+      .g3 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+      .g4 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+      .panel {
+        border: 1px solid var(--line); border-radius: var(--radius-panel);
+        background: var(--ink); box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--ice) 6%, transparent), var(--elev-2);
+      }
+      [data-theme='light'] .panel { box-shadow: var(--elev-2); }
+      .panel-pad { padding: 20px; }
+
+      .swatch { border: 1px solid var(--line); border-radius: var(--radius-tile); overflow: hidden; background: var(--ink); }
+      .swatch .chip { height: 64px; }
+      .swatch .meta { padding: 10px 12px; border-top: 1px solid var(--line); }
+      .swatch .name { font-size: 12px; font-weight: 500; }
+      .swatch .hex { font-family: var(--font-mono); font-size: 10px; color: var(--ghost); margin-top: 2px; }
+      .swatch .role { font-size: 10px; color: var(--ghost); margin-top: 4px; }
+      /* Material layers are effects, not colours, so each chip renders the
+         effect it documents instead of a fill. */
+      .material-chip { border-bottom: 1px solid var(--line); }
+      .material-chip[data-mode='sheen'] {
+        background-color: var(--ink); background-image: var(--sheen);
+      }
+      .material-chip[data-mode='well'] {
+        background: var(--raise); box-shadow: var(--inset-well);
+      }
+      .material-chip[data-mode='chrome'] {
+        background: var(--chrome-bg); backdrop-filter: var(--chrome-blur);
+      }
+      .material-chip[data-mode='stage'] {
+        background-color: var(--void);
+        background-image: var(--stage-layers);
+        background-repeat: var(--stage-repeat);
+        background-size: var(--stage-size);
+        background-blend-mode: var(--stage-blend);
+      }
+      .subhead { font-size: 13px; font-weight: 600; letter-spacing: var(--tracking-title); margin: 32px 0 0; }
+
+      .stack { display: flex; flex-direction: column; gap: 12px; }
+      .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+      /* --- controls (mirrors workspace.css) --- */
+      .btn-primary {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        min-height: 40px; padding: 9px 16px;
+        border: 1px solid color-mix(in srgb, var(--accent-pulse) 65%, transparent);
+        border-radius: var(--radius-field);
+        background: var(--accent-pulse); color: var(--void);
+        font: 600 12px var(--font-sans); letter-spacing: var(--tracking-title);
+        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.26); cursor: pointer;
+        transition: background-color var(--duration-base) var(--ease-in-out), transform var(--duration-fast) var(--ease-out);
+      }
+      .btn-primary:hover { background: color-mix(in srgb, var(--accent-pulse) 88%, var(--ice)); }
+      .btn-primary:active { transform: translateY(1px); }
+      .btn-primary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+      .btn-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 36px; height: 36px; border: 0; background: none;
+        border-radius: var(--radius-tile); color: var(--ghost); cursor: pointer;
+        transition: color var(--duration-base) var(--ease-in-out), background-color var(--duration-base) var(--ease-in-out);
+      }
+      .btn-icon:hover { color: var(--ice); background: color-mix(in srgb, var(--ghost) 9%, transparent); }
+
+      .cmd {
+        display: inline-flex; align-items: center; gap: 8px; width: 18rem; height: 36px;
+        padding-inline: 11px; border: 1px solid var(--line); border-radius: var(--radius-field);
+        background: var(--raise); color: var(--ghost); cursor: pointer;
+        transition: border-color var(--duration-base) var(--ease-in-out), color var(--duration-base) var(--ease-in-out);
+      }
+      .cmd:hover { color: var(--ice); border-color: color-mix(in srgb, var(--accent-pulse) 38%, var(--line)); }
+      .cmd span { flex: 1; text-align: left; font-size: 12px; }
+
+      .keycap {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 20px; min-width: 20px; padding-inline: 5px;
+        border: 1px solid var(--line); border-bottom-color: color-mix(in srgb, var(--ghost) 42%, var(--line));
+        border-radius: 5px; background: var(--ink); color: var(--ghost);
+        font: 500 10px var(--font-mono); line-height: 1;
+      }
+      .badge {
+        display: inline-flex; align-items: center; gap: 5px; height: 22px; padding-inline: 8px;
+        border: 1px solid var(--line); border-radius: var(--radius-badge);
+        background: var(--raise); color: var(--ghost); font-size: 11px; line-height: 1;
+      }
+
+      /* --- navigation --- */
+      .rail { width: 224px; border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--ink); padding: 10px; }
+      .nav-section {
+        display: flex; align-items: center; gap: 8px; height: 30px; margin-top: 8px; padding-inline: 8px;
+        font: 500 10px var(--font-mono); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--ghost);
+      }
+      .nav-section::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+      .nav-link {
+        display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 5px 8px;
+        border: 1px solid transparent; border-radius: var(--radius-field); color: var(--ghost); font-size: 12px;
+      }
+      .nav-icon {
+        display: grid; place-items: center; width: 26px; height: 26px;
+        border: 1px solid transparent; border-radius: var(--radius-badge);
+        font: 500 11px var(--font-mono);
+      }
+      .nav-link.is-hover { color: var(--ice); background: color-mix(in srgb, var(--ghost) 7%, transparent); }
+      .nav-link.is-hover .nav-icon { border-color: var(--line); background: var(--raise); color: var(--ice); }
+      .nav-link.is-active {
+        color: var(--ice);
+        background: color-mix(in srgb, var(--accent-pulse) 9%, var(--ink));
+        border-color: color-mix(in srgb, var(--accent-pulse) 22%, transparent);
+        box-shadow: inset 2px 0 0 var(--accent-pulse);
+      }
+      .nav-link.is-active .nav-icon {
+        border-color: color-mix(in srgb, var(--accent-pulse) 28%, transparent);
+        background: color-mix(in srgb, var(--accent-pulse) 16%, transparent);
+        color: var(--accent-pulse);
+      }
+      .rail-compact { width: 72px; }
+      .rail-compact .nav-link { justify-content: center; padding-inline: 0; min-height: 40px; }
+
+      /* --- stat band --- */
+      .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow: hidden; }
+      .stat { padding: 22px 24px; border-right: 1px solid var(--line); }
+      .stat:last-child { border-right: 0; }
+      .stat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .stat-label { font-size: 11px; font-weight: 500; color: var(--ghost); }
+      .stat-icon {
+        display: grid; place-items: center; width: 28px; height: 28px; flex: none;
+        border: 1px solid var(--line); border-radius: var(--radius-tile); background: var(--raise);
+        font: 500 11px var(--font-mono);
+      }
+      .stat-value {
+        margin: 14px 0 0; font: 500 26px var(--font-mono); line-height: 1.15;
+        letter-spacing: var(--tracking-display); font-variant-numeric: tabular-nums;
+      }
+      .stat-detail { margin: 10px 0 0; font-size: 11px; color: var(--ghost); }
+
+      .list-row { display: flex; align-items: center; gap: 12px; padding: 14px 8px; border-radius: var(--radius-tile); }
+      .list-row.is-hover { background: color-mix(in srgb, var(--ghost) 6%, transparent); }
+      .glyph {
+        display: grid; place-items: center; width: 36px; height: 36px; flex: none;
+        border: 1px solid var(--line); border-radius: var(--radius-tile);
+        background: var(--raise); color: var(--accent-pulse); font: 500 11px var(--font-mono);
+      }
+
+      .meter { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+      .meter > i { display: block; height: 100%; border-radius: 999px; background: var(--accent-pulse); }
+
+      .type-row { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--line); }
+      .type-row:last-child { border-bottom: 0; }
+      .type-meta { font-family: var(--font-mono); font-size: 10px; color: var(--ghost); line-height: 1.8; }
+      .t-display { font-size: 30px; font-weight: 600; letter-spacing: var(--tracking-display); line-height: 1.15; }
+      .t-title { font-size: 16px; font-weight: 600; letter-spacing: var(--tracking-title); }
+      .t-section { font-size: 13px; font-weight: 600; letter-spacing: var(--tracking-title); }
+      .t-body { font-size: 12px; }
+      .t-label { font-size: 11px; font-weight: 500; color: var(--ghost); }
+      .t-eyebrow { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--ghost); }
+      .t-data { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+      .elev { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+      .elev > div {
+        border: 1px solid var(--line); border-radius: var(--radius-panel);
+        background: var(--ink); padding: 18px; font: 500 10px var(--font-mono); color: var(--ghost);
+      }
+      .toggle {
+        display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-field);
+        background: var(--raise); overflow: hidden;
+      }
+      .toggle button {
+        border: 0; background: none; color: var(--ghost); cursor: pointer;
+        padding: 8px 14px; font: 500 12px var(--font-sans);
+      }
+      .toggle button[aria-pressed='true'] { background: color-mix(in srgb, var(--accent-pulse) 14%, transparent); color: var(--accent-pulse); }
+      code { font-family: var(--font-mono); font-size: 11px; color: var(--ghost); }
+      @media (max-width: 640px) {
+        .type-row { grid-template-columns: 1fr; gap: 6px; }
+        .cmd { width: 100%; }
+      }
+    </style>
+  </head>
+  <body data-page-node-id="0cb9Qx3ppDzA5Gsgl4iAvG">
+    <div class="wrap" data-page-node-id="dechHhOBSGErvyMNOzyU0I">
+      <div class="topbar" data-page-node-id="7BGtKPCtuAP0OSGu6ksyjr">
+        <span class="brand" data-page-node-id="EjwZmlBXSENJyy2874Nub7">
+          <span class="brand-mark" data-page-node-id="QSdRWNtLHGK2XLdNxo3NDo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" data-page-node-id="JTNtSJvDbiyZ4kB5UUB4Dp">
+              <path d="M21 16.5v-9l-9-5-9 5v9l9 5 9-5Z" data-page-node-id="9bYr1e92hgOGDF1BDUAmHJ" />
+            </svg>
+          </span>
+          AgentCanvas
+        </span>
+        <span class="badge" data-page-node-id="tHUWyjuorzLhVZB1a1rmye">Design system v2</span>
+        <span class="spacer" data-page-node-id="GsVD1jy83wWXUWLplVyZjb"></span>
+        <span class="toggle" role="group" aria-label="主题" data-page-node-id="f8zsszbTHQnCPpiLMAtIka">
+          <button type="button" data-theme-set="dark" aria-pressed="true" data-page-node-id="WowAvAPh4LSpG58hPpTsNq">暗色</button>
+          <button type="button" data-theme-set="light" aria-pressed="false" data-page-node-id="6WBovUw9XzsHzHv4diO4cV">亮色</button>
+        </span>
+      </div>
+
+      <h1 data-page-node-id="NCIR5701M93r8vtkoQffUi">AgentCanvas 设计系统</h1>
+      <p class="lede" data-page-node-id="z7X9YvG5ChwEwoyrebeohq">
+        这是 <code data-page-node-id="uEX476CyBpEezSbrhKqHDo">DESIGN.md</code> 的可视化对照页。页面直接使用应用里的同一套 token,任何一处与
+        <code data-page-node-id="FWZjp7HljtrOTdYz9PM3gi">frontend/src/index.css</code> 不一致,以仓库根目录的 <code data-page-node-id="FDl7TOTQl7XDn0TJ3CwONb">DESIGN.md</code> 为准。
+      </p>
+
+      <section data-page-node-id="dsycAEKXtGijinuL4f0jn2">
+        <p class="eyebrow" data-page-node-id="0sULgBAjJqZx05BKIFKYBr">01 / Surface ladder</p>
+        <h2 data-page-node-id="q6yOMZk9x4YrSSA6x4DrAj">表面阶梯</h2>
+        <p class="note" data-page-node-id="qHxhAV2WmuAT6mN53VqhNl">深度按 <code data-page-node-id="0pGzkI0pHe7LBjofAodVUW">void → ink → raise</code> 逐级抬升,靠 1px 发丝描边切分。投影只负责"浮起",不负责"厚重"。</p>
+        <div class="grid g4" id="surfaces" data-page-node-id="j2Gq8sKhdB4mStCf17aFQQ"></div>
+      </section>
+
+      <section data-page-node-id="xf90snew8TKkHKMcTMUKzS">
+        <p class="eyebrow" data-page-node-id="htK3nYzSFeSC3a0FEu6mXm">02 / Text &amp; accent</p>
+        <h2 data-page-node-id="28jFEeLRVW9Yqi8wYvoarF">文本与语义强调</h2>
+        <p class="note" data-page-node-id="cgjCDcWh3mjce6YNfJZCHT">强调色稀缺:<code data-page-node-id="XQbMuyLAZeFZstBI5uxRYy">pulse</code> 只用于品牌、主操作、焦点与当前态;其余四色只承担语义,绝不作装饰。</p>
+        <div class="grid g4" id="colors" data-page-node-id="GnAgElLHLZvHajytK1BILm"></div>
+
+        <h3 class="subhead">材质层 (Material layers)</h3>
+        <p class="note">暗色的"质感"来自这四层,而不是更多颜色:顶部光让面板像一块被照亮的板子,凹槽阴影让输入框读起来能打字,chrome 磨砂玻璃保留背后的光晕,颗粒层则以 50% 灰为中性、只给大面积渐变做抖动而不冲淡近黑。<strong>浅色下四者全部关闭</strong>,平面观感原样保留。</p>
+        <div class="grid g4" id="materials"></div>
+      </section>
+
+      <section data-page-node-id="8F3cTsC4CKv7WZ9KFeLUsj">
+        <p class="eyebrow" data-page-node-id="bnHB18UreiCcjpscPkd0G0">03 / Typography</p>
+        <h2 data-page-node-id="hKQrSe4tfvTtJcAdG6MOus">排版</h2>
+        <p class="note" data-page-node-id="ELSAhR3AsX77j5OJCYHzz7">
+          <strong data-page-node-id="6ShZRBYEGRx3C7KmXNU2vH">Noto Sans SC</strong>(可变字重 100–900)承担展示与 UI 文本 —— 它同时提供完整的中文与拉丁字形集,
+          所以中英混排不需要回退栈。<strong data-page-node-id="B0AS9Y2BvEBneCUKmKd0Zb">JetBrains Mono</strong> 只承担遥测、标识符、键帽与数值列。
+          展示字号收紧(<code data-page-node-id="IdGTslWAtx5Mn9QCqS1kqa">-0.018em</code>),小标签放开(<code data-page-node-id="4pIZRqX1DFlu5P4L7VmgRY">+0.08em</code>)。
+        </p>
+        <div class="panel panel-pad" data-page-node-id="Ji0rDiOg3Db7EngfzSUaE7">
+          <div class="type-row" data-page-node-id="gkLRfhJyEVhJIvmdx1YMB7">
+            <div class="type-meta" data-page-node-id="tsDil2Bp2ecyqiKmqwdRi5">display-title<br  data-page-node-id="X1uBGZ0KE2K0xLRUqsnrGr"/>30px / 600<br  data-page-node-id="vLlLAVSFhmpB1qwDx0AVRi"/>tracking -0.018em</div>
+            <div class="t-display" data-page-node-id="6N9iRfIvGvMXyClwm8Niac">工作台概览</div>
+          </div>
+          <div class="type-row" data-page-node-id="s7kYL4fXVq07UOFmGJslH4">
+            <div class="type-meta" data-page-node-id="1Wab0XlsaAueT8SxDudZiT">page-title<br  data-page-node-id="rlhzCIPyaoTgCEoO0umqlq"/>16px / 600<br  data-page-node-id="dtVwPy93y2aFgAFh3xVXxi"/>tracking -0.006em</div>
+            <div class="t-title" data-page-node-id="DFOB7Bz0mEPyUAJbpBPUTz">知识库</div>
+          </div>
+          <div class="type-row" data-page-node-id="YVDiddeEEEH97clL0m8Xws">
+            <div class="type-meta" data-page-node-id="NzoOnurQdUUKH80LebEEoE">section-title<br  data-page-node-id="MAV2RVf9KqTQwEGtoKDnOd"/>13px / 600</div>
+            <div class="t-section" data-page-node-id="zjQBTxFNRj6hD0X3OO8t7O">最近工作流</div>
+          </div>
+          <div class="type-row" data-page-node-id="h8zyszHLwqnaDaVSwnCtqS">
+            <div class="type-meta" data-page-node-id="copcLRUusDCMAdgTDRgzuk">body<br  data-page-node-id="mAh7c4pvqODwNthkMOrue8"/>12px / 400</div>
+            <div class="t-body" data-page-node-id="hrLcMdZ2rahdds9BzYIVAO">从工作流到每一次执行,掌握你的工作空间。</div>
+          </div>
+          <div class="type-row" data-page-node-id="jkhN4wYCxmuiFs4ZkKC9gC">
+            <div class="type-meta" data-page-node-id="WZHTHmJK5W2OHBjhQ6nCc9">stat-label<br  data-page-node-id="zPOGN55gBwwHhb31hRRRDE"/>11px / 500</div>
+            <div class="t-label" data-page-node-id="4AQCcNsXrSw1F9NYM06kat">执行成功率</div>
+          </div>
+          <div class="type-row" data-page-node-id="HZpKMq2v0bwOlZI8xB0IHT">
+            <div class="type-meta" data-page-node-id="X69B9mcB58FG4e3ZsjbUdQ">eyebrow<br  data-page-node-id="wsSyX5xqLr3GuNV4ZoIHsm"/>10px mono / +0.08em</div>
+            <div class="t-eyebrow" data-page-node-id="LnNsLXhmPWvVvaCg2QJyDE">Operations overview</div>
+          </div>
+          <div class="type-row" data-page-node-id="q89GI3vdxZVOuO2YnVEiv7">
+            <div class="type-meta" data-page-node-id="FmIrTi6Jj4Q3fuqgKUqAdH">data<br  data-page-node-id="aCFOEw34bsOJVDLF0NiMHB"/>mono / tabular-nums</div>
+            <div class="t-data" data-page-node-id="mOFKFcf7bPtA2JeU9FD4Q0">US$0.230000 &nbsp;·&nbsp; exec_1d3f &nbsp;·&nbsp; 1,073,741,824 B</div>
+          </div>
+        </div>
+      </section>
+
+      <section data-page-node-id="LCdlDQs5l1UwBvhTynqKa5">
+        <p class="eyebrow" data-page-node-id="pp3cUOk0BKKvJbcNunXrAq">04 / Controls</p>
+        <h2 data-page-node-id="HJ3SWStBbUmIwQvSOrG99y">控件与状态</h2>
+        <div class="panel panel-pad stack" data-page-node-id="l58rN5JVvCNaEaMiunKaYj">
+          <div class="row" data-page-node-id="mYr1efyMVQ2nCEK3vHJX00">
+            <button class="btn-primary" type="button" data-page-node-id="6XB27ECkyTCAFMxDT66pwQ">新建工作流</button>
+            <button class="btn-primary" type="button" disabled data-page-node-id="UnHgS459VPDbDrOPFsJMQZ">已禁用</button>
+            <button class="btn-icon" type="button" aria-label="刷新" data-page-node-id="B3dzktMNeW1EcaESCYeGwe">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-page-node-id="Rtt87V0nOkfOwrDAQQMmhK">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" data-page-node-id="d2Aq4GMIVcXINKS9BkIdzj" />
+              </svg>
+            </button>
+            <span class="badge" data-page-node-id="eUvTAHjGL7BQUpLFFsKScC">最近 7 天</span>
+            <span class="badge" style="color: var(--accent-ok)" data-page-node-id="lmaPwkVBNmdXb2GYXkJDnC">已完成</span>
+            <span class="badge" style="color: var(--accent-warn)" data-page-node-id="92W0n8RDijt7UO2sk9z6Qm">未定价</span>
+            <span class="badge" style="color: var(--accent-bad)" data-page-node-id="TCXW8ZJbzEKDNA5jQCDHFO">失败</span>
+          </div>
+          <div class="row" data-page-node-id="VSkCxoZDsVrUI67CA1XSu4">
+            <button class="cmd" type="button" data-page-node-id="W5ICC6JLEILSlyz6N2byME">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-page-node-id="wGZdjU0gLc5DpLy6S3E8hj">
+                <circle cx="11" cy="11" r="7" data-page-node-id="dCTISpD5NjupbwyG53vwjP" /><path d="m20 20-3.5-3.5" data-page-node-id="xCnQAqxleL5nZ08pRsUaLF" />
+              </svg>
+              <span data-page-node-id="PdLXoynWd96SdEoKcVtZGN">搜索和命令</span>
+              <span class="keycap" data-page-node-id="8VhqwOLVLR6CSfEOSxR1mS">Ctrl K</span>
+            </button>
+            <span class="keycap" data-page-node-id="dylx23WdsHYAAo9C3FXii2">⌘K</span>
+            <span class="keycap" data-page-node-id="tgBkAT4hQFjLoegRNDuy5J">Esc</span>
+          </div>
+          <p class="note" style="margin: 4px 0 0" data-page-node-id="I91ZgbEwpzPHzYxGYx9MAM">
+            主按钮半径 <code data-page-node-id="nfKot9LKLXZcllq997n2J0">8px</code>,永不做成药丸;键帽底边比其余三边深一档,模拟键帽侧壁。
+          </p>
+        </div>
+      </section>
+
+      <section data-page-node-id="gCP1mxip4D8Ph5Pdx4QcDW">
+        <p class="eyebrow" data-page-node-id="vZOkjP8fnkqIzLQtuVuRrJ">05 / Navigation</p>
+        <h2 data-page-node-id="ElUSKhNEGLAszTrBw2cIWM">导航</h2>
+        <p class="note" data-page-node-id="ntB5NEBCSXZugOjsxsuo5j">分组标题本身就是分隔线。当前项 = 底色 + 描边 + 左侧标条 + 图标底,四处同时变化,不靠单一文字变色。</p>
+        <div class="row" style="align-items: flex-start" data-page-node-id="UtERuXTqlt5CD7Fc9YlSqm">
+          <div class="rail" data-page-node-id="3cD67jSEnPt6F7jnbSDkgB">
+            <p class="nav-section" data-page-node-id="PsTsHR4PK9xvLoNAUFbZt7">工作空间</p>
+            <div class="nav-link is-active" data-page-node-id="svlFBpEzI6uy4jH0COq8AX"><span class="nav-icon" data-page-node-id="HmC6JJUz8Ja4VbBXD4yf8U">◧</span>概览</div>
+            <div class="nav-link is-hover" data-page-node-id="zPttAQ2VtPzkL85P5UBn7M"><span class="nav-icon" data-page-node-id="tIkCEfJhdv78FFfnm6rogO">◇</span>工作流</div>
+            <div class="nav-link" data-page-node-id="yFgpXdoHjOPyS1Nb2bDZq9"><span class="nav-icon" data-page-node-id="xH6SkFICbhEp11JgV9DQjj">▤</span>知识库</div>
+            <div class="nav-link" data-page-node-id="vFl4l5zQIFma9HUGE3f3yG"><span class="nav-icon" data-page-node-id="0mR79JpKMa3b7gUpb7KSju">△</span>评测</div>
+            <p class="nav-section" data-page-node-id="G3s3rUINzE7fuBneSbOMXg">管理与设置</p>
+            <div class="nav-link" data-page-node-id="Dv4IKiZ8FbaGW727vCJi2X"><span class="nav-icon" data-page-node-id="TgTwASdUhwuRzpAvbicBUD">◐</span>模型与供应商</div>
+            <div class="nav-link" data-page-node-id="e2V9vLNidLGUGICeB7sbzC"><span class="nav-icon" data-page-node-id="e5qi3riPrzV7eDZfU7Dv69">▥</span>MCP</div>
+          </div>
+          <div class="rail rail-compact" data-page-node-id="Tr01OJEX0TBlIuJMBfFmIo">
+            <p class="nav-section" style="justify-content: center" data-page-node-id="X2GVMXwu5YCgEQbkqL8Vu1">收</p>
+            <div class="nav-link is-active" data-page-node-id="fjKOMMa7SBO4mLEzMWuHzN"><span class="nav-icon" data-page-node-id="HqpJyKCONwOzr3xIcu4ZJI">◧</span></div>
+            <div class="nav-link" data-page-node-id="qZM50cLxf9b1i3CzYcdaH7"><span class="nav-icon" data-page-node-id="DXcDQpK8MgqqwlY6awcnLi">◇</span></div>
+            <div class="nav-link" data-page-node-id="shs8NImPJPOmjIZv5LFBWn"><span class="nav-icon" data-page-node-id="5NSPllPdZWT3cIop8uC9hA">▤</span></div>
+            <div class="nav-link" data-page-node-id="SnoHhtcFwY24OVmmLvyjH4"><span class="nav-icon" data-page-node-id="cU7G6XHVgIYb90h9qAQoyi">△</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section data-page-node-id="TGRJiU0jz0nj8IxMwPjj4x">
+        <p class="eyebrow" data-page-node-id="omtoJcIE7bzHbbONEhDOPH">06 / Data surfaces</p>
+        <h2 data-page-node-id="GCEADwnR18NZNA2pfL0eEk">数据面板</h2>
+        <div class="panel" style="margin-bottom: 16px" data-page-node-id="nYuE99cPtePFiDs8E2wSg5">
+          <div class="stats" data-page-node-id="iwVCaVRsqfcf4NdIL87tAf">
+            <div class="stat" data-page-node-id="VGhClX8cauqdUYaX8lQVKK">
+              <div class="stat-head" data-page-node-id="GpphsqA7O5W7s7wbIk06B9"><span class="stat-label" data-page-node-id="r4wDIDwkwnTikUiFNRqk1l">执行成功率</span><span class="stat-icon" style="color: var(--accent-ok)" data-page-node-id="i9u6YgSTFEknZVezxWVmT0">✓</span></div>
+              <p class="stat-value" data-page-node-id="lYdaAUCCcHXbP0DUKhQtQb">98%</p>
+              <p class="stat-detail" data-page-node-id="5ocs5hOEQAHmbZkhIdsfvQ">150 成功 / 3 失败</p>
+            </div>
+            <div class="stat" data-page-node-id="1W5O2gDCELubOnm9sMCxOS">
+              <div class="stat-head" data-page-node-id="aBgI29arGTjcl2fukmOuTI"><span class="stat-label" data-page-node-id="TLCD0p5PpACinaqDwiGJcM">近 7 日执行</span><span class="stat-icon" style="color: var(--accent-pulse)" data-page-node-id="3MHnAgQZCiPQ4NFy45Umbz">◇</span></div>
+              <p class="stat-value" data-page-node-id="HlTeEtzGGBgPNZaEZnO4cA">153</p>
+              <p class="stat-detail" data-page-node-id="n7yDtI2sHb4F3ru4QYKbOP">2 进行中</p>
+            </div>
+            <div class="stat" data-page-node-id="cBZ48Ky6NjjrxBP7JdwOQf">
+              <div class="stat-head" data-page-node-id="49emySe57griDZqECXZr89"><span class="stat-label" data-page-node-id="eowME6Y6dT70e9PoFdN90c">估算费用</span><span class="stat-icon" style="color: var(--accent-volt)" data-page-node-id="kZKzdgh8youvnTM0sMUhdb">$</span></div>
+              <p class="stat-value" data-page-node-id="R3v9xzGDecT0WsRLDkAoTc">待定价</p>
+              <p class="stat-detail" data-page-node-id="lHUbFMlNtKeYIBTE5OxU2D">存在未定价调用</p>
+            </div>
+            <div class="stat" data-page-node-id="f9tqgpZBG61yxMy1VUWUKD">
+              <div class="stat-head" data-page-node-id="V9CDbg07DH7IBJEBFwrxCr"><span class="stat-label" data-page-node-id="IlDqRTq7gzvkZD8pCspuG3">配额水位</span><span class="stat-icon" data-page-node-id="RKClK6IditeUnfAQcn2xPU">◔</span></div>
+              <p class="stat-value" data-page-node-id="LYlWOHocNv7Qx25xxAMaAs">40%</p>
+              <p class="stat-detail" data-page-node-id="x9JyPTL1mol3RSaGOf6cut">当前项目最高占用</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel panel-pad" data-page-node-id="8CTJEKQvXO78vVn1HUg4k2">
+          <div class="list-row is-hover" data-page-node-id="T6q0uWaPcomFB5o5K1o2sZ">
+            <span class="glyph" data-page-node-id="YK8RpoR9HiuYRg4DpoX2Aj">◇</span>
+            <span style="flex: 1" data-page-node-id="q0WnCOl8RnYcRdCgcGmzD6">
+              <span style="display: block; font-size: 12px; font-weight: 500" data-page-node-id="GziZZzZamEvoJI4i6mMHbr">Release assistant</span>
+              <span style="display: block; font-size: 11px; color: var(--ghost); margin-top: 4px" data-page-node-id="IPPU7UdMezI9XzvIA8kyJ2">Validate and prepare a release</span>
+            </span>
+            <span style="font: 400 10px var(--font-mono); color: var(--ghost)" data-page-node-id="RIkTVvbSHrHECEpGnf4dFA">2026/9/8</span>
+          </div>
+          <div class="list-row" data-page-node-id="hBWSua5KiPCg9DArRG6N4V">
+            <span class="glyph" data-page-node-id="j1ZcN9FNXnnOVqk7j8EcvU">◇</span>
+            <span style="flex: 1" data-page-node-id="OoSTGi2h7NkCnyKHVkJ5Kp">
+              <span style="display: block; font-size: 12px; font-weight: 500" data-page-node-id="KVDbCQ0uXUEPgPbftQTog5">Knowledge retrieval</span>
+              <span style="display: block; font-size: 11px; color: var(--ghost); margin-top: 4px" data-page-node-id="cngFfEthcqGK5rGaUqvuSQ">Find and cite approved context</span>
+            </span>
+            <span style="font: 400 10px var(--font-mono); color: var(--ghost)" data-page-node-id="WNjlrYeTio1i3fHNHBws4L">2026/9/7</span>
+          </div>
+          <div style="padding: 16px 8px 4px" data-page-node-id="Jrs1PaT1sahiNdxu5NohRH">
+            <div class="row" style="justify-content: space-between; font-size: 12px" data-page-node-id="JsNVUfbB1iH5MY3vLGCMUo">
+              <span data-page-node-id="0eUbblfDT99qHeTzzpNaH4">存储</span><span style="font: 400 10px var(--font-mono); color: var(--ghost)" data-page-node-id="DyRITjPGdBITafD7Qf2dQI">38%</span>
+            </div>
+            <p style="margin: 8px 0 10px; font: 400 10px var(--font-mono); color: var(--ghost)" data-page-node-id="3VTZlN22QgKe7kmdScMfo1">402,653,184 B / 1,073,741,824 B</p>
+            <div class="meter" data-page-node-id="U0b0DlADpceHtYEGgyLru5"><i style="width: 38%" data-page-node-id="GWL41TLC7SvJreA6wBiXFr"></i></div>
+          </div>
+        </div>
+      </section>
+
+      <section data-page-node-id="Ls7T5nD9De13UKTTusAd3h">
+        <p class="eyebrow" data-page-node-id="8ie9rVqjAxrSF2lC8bkdDZ">07 / Elevation</p>
+        <h2 data-page-node-id="pk1wqZ0482Zj6N62UFwuEd">投影阶梯</h2>
+        <p class="note" data-page-node-id="vVFI9q6K4cXSWr00idgyNn">
+          每一级都是"小接触投影 + 大范围低透明度环境投影"的堆叠,禁止单层重投影。浅色主题整套覆写为低不透明度,
+          否则深色投影在白底上会变成灰晕。
+        </p>
+        <div class="elev" data-page-node-id="EVYDC4obMlEvijOnGDvvGx">
+          <div style="box-shadow: var(--elev-1)" data-page-node-id="7YmoYnvVlm7E6ylEACe168">elev-1<br  data-page-node-id="oXg6BI0Zk4kLUj1YXDixQ9"/>平面 / 接触</div>
+          <div style="box-shadow: var(--elev-2)" data-page-node-id="OTL2kx0IK4UflJJ3HGBaFT">elev-2<br  data-page-node-id="Gpck0JWmVQ0nTyNeVyXf85"/>面板</div>
+          <div style="box-shadow: var(--elev-3)" data-page-node-id="AvKpmkKlmQmnHPl5rADpzo">elev-3<br  data-page-node-id="w5Ci2DqCPnZvGzLC0hRVUg"/>抬升 / hover</div>
+          <div style="box-shadow: var(--elev-4)" data-page-node-id="XBVPUNlF5Sl6TvALCKTa4R">elev-4<br  data-page-node-id="Z1jneTHAMl6CsVLhrPuEWd"/>浮层 / 模态</div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var stored = null;
+        try {
+          stored = localStorage.getItem('agentcanvas:design-preview-theme');
+        } catch (e) {}
+        var initial = stored === 'light' || stored === 'dark'
+          ? stored
+          : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+
+        function apply(theme) {
+          if (theme === 'light') root.setAttribute('data-theme', 'light');
+          else root.removeAttribute('data-theme');
+          document.querySelectorAll('[data-theme-set]').forEach(function (button) {
+            button.setAttribute('aria-pressed', String(button.dataset.themeSet === theme));
+          });
+          render();
+        }
+        root.ownerDocument.querySelectorAll('[data-theme-set]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var theme = button.dataset.themeSet;
+            try { localStorage.setItem('agentcanvas:design-preview-theme', theme); } catch (e) {}
+            apply(theme);
+          });
+        });
+
+        var SURFACES = [
+          ['void', '页面底、画布底(暗色偏紫 ~235°)', '暗 #060810 / 浅 #f6f8fb'],
+          ['ink', '面板、卡片(暗色偏蓝 ~232°)', '暗 #0b0e1c / 浅 #ffffff'],
+          ['raise', 'hover 行、输入框、图标底(~228°)', '暗 #161c30 / 浅 #eef1f8'],
+          ['line', '1px 发丝描边(必须看得见)', '暗 #1e2440 / 浅 #e1e6ef'],
+          ['line-soft', '面板内部再低一级的分隔', '暗 #14182a / 浅 #eef1f7'],
+          ['line-strong', '抬升面顶部边缘', '暗 #2c3450 / 浅 #d3dae6'],
+        ];
+        var COLORS = [
+          ['ice', '主文本、标题、数据值', '暗 #eaeefb / 浅 #161c2a'],
+          ['ghost', '次要文本、标签、图标', '暗 #909ab2 / 浅 #3f4654'],
+          ['pulse', '品牌 / 主操作 / 焦点 / 当前态(~187°)', '暗 #22d3ee / 浅 #155e75'],
+          ['volt', '模型与费用', '暗 #8b5cf6 / 浅 #6d28d9'],
+          ['ok', '成功、完成', '暗 #34d399 / 浅 #065f46'],
+          ['warn', '警告、配额水位、未定价', '暗 #fbbf24 / 浅 #92400e'],
+          ['bad', '失败、错误', '暗 #fb7185 / 浅 #9f1239'],
+        ];
+        /* Material layers are the part that gives the dark theme its body. Each
+           one is rendered as the effect it documents, not as a colour fill. */
+        var MATERIALS = [
+          ['sheen', '面板顶部光:被上方照亮', '暗 顶部 5.5% 白光渐隐 / 浅 none', 'sheen'],
+          ['inset-well', '输入框、命令触发凹进去', '暗 inset rgba(2,3,10,.45) / 浅 rgba(16,24,40,.06)', 'well'],
+          ['chrome-bg', '顶栏 / 侧栏 / 抽屉磨砂玻璃', '暗 rgba(9,11,23,.72) + blur / 浅 白 82%', 'chrome'],
+          ['stage-layers', '壳层唯一合成背景:颗粒 + 3 层出画外的光', '暗 有(overlay 混合)/ 浅 none', 'stage'],
+        ];
+
+        function swatches(host, items) {
+          host.innerHTML = items.map(function (item) {
+            return (
+              '<div class="swatch"><div class="chip" style="background: var(--' + item[0] + ')"></div>' +
+              '<div class="meta"><div class="name">' + item[0] + '</div>' +
+              '<div class="hex">' + item[2] + '</div>' +
+              '<div class="role">' + item[1] + '</div></div></div>'
+            );
+          }).join('');
+        }
+        function materialChips(host, items) {
+          host.innerHTML = items.map(function (item) {
+            return (
+              '<div class="swatch"><div class="chip material-chip" data-mode="' + item[3] + '"></div>' +
+              '<div class="meta"><div class="name">' + item[0] + '</div>' +
+              '<div class="hex">' + item[2] + '</div>' +
+              '<div class="role">' + item[1] + '</div></div></div>'
+            );
+          }).join('');
+        }
+        function render() {
+          swatches(document.getElementById('surfaces'), SURFACES);
+          swatches(document.getElementById('colors'), COLORS);
+          materialChips(document.getElementById('materials'), MATERIALS);
+        }
+        apply(initial);
+      })();
+    </script>
+  </body>
+</html>

@@ -62,6 +62,9 @@ class Workflow(Base):
     )
     executions: Mapped[list[Execution]] = relationship(back_populates="workflow")
     project: Mapped[Any | None] = relationship("Project", back_populates="workflows")
+    marketplace_entry: Mapped[Any | None] = relationship(
+        "MarketplaceWorkflow", back_populates="workflow", uselist=False
+    )
 
 
 class WorkflowVersion(Base):

@@ -1,4 +1,7 @@
-/** Thin fetch wrapper that talks to the Vite-proxied backend. */
+/** Thin fetch wrapper that talks to the Vite-proxied (web) or injected
+ * desktop-sidecar backend (C9 §3.2: one central prefix point). */
+
+import { backendUrl } from "@/api/backendOrigin";
 
 export class ApiError extends Error {
   status: number;
@@ -23,7 +26,7 @@ function canRefresh(path: string): boolean {
 }
 
 async function performRefresh(): Promise<boolean> {
-  return fetch("/api/auth/refresh", {
+  return fetch(backendUrl("/api/auth/refresh"), {
     method: "POST",
     credentials: "include",
     headers: { Accept: "application/json" },
@@ -33,7 +36,7 @@ async function performRefresh(): Promise<boolean> {
 }
 
 async function sessionAlreadyRefreshed(): Promise<boolean> {
-  return fetch("/api/auth/me", {
+  return fetch(backendUrl("/api/auth/me"), {
     credentials: "include",
     headers: { Accept: "application/json" },
   })
@@ -88,13 +91,19 @@ export async function apiFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
+  // Desktop mode re-points every call at the injected sidecar origin; the
+  // pathname+search of a Request input is re-prefixed so no caller can leak a
+  // page-origin URL past this wrapper.
   const requestUrl =
     input instanceof Request
-      ? input.url
-      : new URL(String(input), window.location.origin).toString();
-  const path = new URL(requestUrl).pathname;
+      ? backendUrl(`${new URL(input.url).pathname}${new URL(input.url).search}`)
+      : backendUrl(String(input));
+  const path = new URL(requestUrl, window.location.origin).pathname;
   const requestGeneration = sessionGeneration;
-  const request = new Request(input instanceof Request ? input : requestUrl, {
+  const request = new Request(requestUrl, {
+    ...(input instanceof Request
+      ? { method: input.method, headers: input.headers, body: input.body ?? undefined }
+      : init),
     ...init,
     credentials: "include",
   });
@@ -169,4 +178,44 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   });
   if (!res.ok) throw await responseError(res);
   return res.json() as Promise<T>;
+}
+
+/** Filename advertised by a `Content-Disposition: attachment` response. */
+function attachmentFilename(res: Response, fallback: string): string {
+  const header = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header);
+  const raw = match?.[1]?.trim();
+  if (!raw) return fallback;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Fetch a credentialed endpoint and hand its body to the browser as a file
+ * download. The response is buffered so an error status still surfaces as an
+ * `ApiError` instead of a downloaded error page, and the session-refresh
+ * retry in `apiFetch` keeps working — a bare `<a href>` would bypass both.
+ * Returns the saved filename (server-advertised when available). */
+export async function apiDownload(path: string, fallbackName: string): Promise<string> {
+  const res = await apiFetch(path, {
+    credentials: "include",
+    headers: { Accept: "*/*" },
+  });
+  if (!res.ok) throw await responseError(res);
+  const filename = attachmentFilename(res, fallbackName);
+  const url = URL.createObjectURL(await res.blob());
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return filename;
 }

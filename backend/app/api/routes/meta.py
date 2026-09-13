@@ -20,10 +20,13 @@ from app.db.repositories import ModelConfigRepo
 from app.engine.nodes import list_node_types
 from app.providers import PROVIDERS
 from app.schemas.api import (
+    DiscoveredModelOut,
     MetaOut,
     ModelConfigCreate,
     ModelConfigOut,
     ModelConfigUpdate,
+    ModelDiscoveryOut,
+    ModelDiscoveryRequest,
 )
 from app.schemas.provider_capabilities import (
     ProviderCapabilitiesOut,
@@ -40,6 +43,14 @@ from app.services.model_dependencies import (
     changes_embedding_behavior,
     dependent_knowledge_base_ids,
     invalidate_knowledge_indexes,
+)
+from app.services.model_discovery import (
+    PROBE_PROVIDERS,
+    ModelDiscoveryError,
+    supported_providers,
+)
+from app.services.model_discovery import (
+    discover_models as discover_provider_models,
 )
 
 router = APIRouter(prefix="/api", tags=["meta"])
@@ -126,6 +137,92 @@ async def list_provider_capabilities(
         )
         for provider_name in sorted(PROVIDERS)
     ]
+
+
+@router.post("/models/discover", response_model=ModelDiscoveryOut)
+async def discover_models(
+    body: ModelDiscoveryRequest,
+    session: SessionDep,
+    container: ContainerDep,
+    principal: AdminDep,
+) -> ModelDiscoveryOut:
+    """List the models an endpoint serves, so the dialog can offer a picker.
+
+    The API key never leaves the request: an inline ``api_key`` is used for this
+    probe and never persisted, and ``model_config_id`` reuses a saved config's
+    decrypted key server-side. The probe is audited (without the key) because it
+    is an operator-triggered outbound request.
+    """
+    if body.provider not in PROVIDERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown provider '{body.provider}'. available: {sorted(PROVIDERS)}",
+        )
+    if body.provider not in PROBE_PROVIDERS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"provider '{body.provider}' does not support model discovery; "
+                f"supported: {list(supported_providers())}"
+            ),
+        )
+
+    api_key = body.api_key or ""
+    base_url = body.base_url
+    if body.model_config_id:
+        row = await ModelConfigRepo(session).get(body.model_config_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="model not found")
+        if row.provider != body.provider:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"provider '{body.provider}' does not match model "
+                    f"'{body.model_config_id}' ({row.provider})"
+                ),
+            )
+        base_url = base_url or row.base_url
+        if not api_key:
+            try:
+                api_key = container.secret_resolver.decrypt(row.api_key_encrypted)
+            except SecretProviderError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        result = await discover_provider_models(
+            body.provider,
+            base_url=base_url,
+            api_key=api_key,
+            allow_private_network=body.allow_private_network,
+            timeout_seconds=container.settings.discovery_timeout_seconds,
+        )
+    except ModelDiscoveryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await record_audit(
+        session,
+        principal,
+        action="model.discovered",
+        resource_type="model",
+        resource_id=body.model_config_id or body.provider,
+        resource_name=body.model_config_id or body.provider,
+        details={
+            "provider": body.provider,
+            "base_url": result.base_url,
+            "model_count": len(result.models),
+            "allow_private_network": body.allow_private_network,
+        },
+    )
+    await session.commit()
+    return ModelDiscoveryOut(
+        provider=result.provider,
+        base_url=result.base_url,
+        models=[
+            DiscoveredModelOut(id=model.id, kind=model.kind, owned_by=model.owned_by)
+            for model in result.models
+        ],
+        latency_ms=result.latency_ms,
+    )
 
 
 @router.post("/models", response_model=ModelConfigOut, status_code=201)

@@ -13,6 +13,7 @@ from app.api.routes import (
     evaluations,
     executions,
     knowledge,
+    marketplace,
     mcp,
     mcp_catalog,
     mcp_catalog_rollout,
@@ -32,6 +33,7 @@ from app.api.routes import (
     workflow_api,
     workflow_callbacks,
     workflow_collaboration,
+    workflow_copilot,
     workflow_reviews,
     workflow_schedules,
     workflow_transfer,
@@ -50,6 +52,7 @@ api_router.include_router(templates.router)
 api_router.include_router(usage.router)
 api_router.include_router(workflow_transfer.router)
 api_router.include_router(workflow_collaboration.router)
+api_router.include_router(workflow_copilot.router)
 api_router.include_router(workflow_reviews.router)
 api_router.include_router(workflows.router)
 api_router.include_router(workflow_versions.router)
@@ -65,6 +68,7 @@ api_router.include_router(project_quotas.router)
 api_router.include_router(search.router)
 api_router.include_router(service_accounts.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(marketplace.router)
 api_router.include_router(mcp.router)
 api_router.include_router(mcp_catalog.router)
 api_router.include_router(mcp_catalog_rollout.router)

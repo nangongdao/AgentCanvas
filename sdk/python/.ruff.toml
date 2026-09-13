@@ -1,0 +1,12 @@
+[lint]
+ignore = [
+    "PLR2004",  # Magic value in comparison - HTTP status codes are well-known
+    "TRY003",   # Long exception messages - acceptable for client library
+    "N815",     # mixedCase variables - required for API compatibility (sourceHandle, targetHandle)
+    "PYI034",   # __enter__ return type - using quoted string is acceptable
+    "UP045",    # Optional[X] over X | None: SDK supports Python 3.9 where the
+                # PEP 604 union would crash pydantic's runtime annotation eval
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101"]  # Allow assert statements in tests

@@ -204,7 +204,7 @@ export function AppsPage() {
   );
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col bg-void text-ice">
+    <div className="flex h-full w-full min-w-0 flex-col text-ice">
       <header role="presentation" className="flex h-14 items-center gap-3 border-b border-line px-4">
         <Boxes size={18} className="text-pulse" />
         <h1 className="text-sm font-semibold">应用发布</h1>

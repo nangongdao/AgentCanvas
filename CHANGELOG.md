@@ -160,6 +160,86 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
   app, session, message, citation, document, knowledge-base, project, and link
   token ownership before serving the original file. Application usage now
   reports referenced/available citation counts and citation coverage.
+- Workflow AI Copilot (backlog): `POST /api/workflows/copilot/draft` turns a
+  natural-language request into a Workflow DSL draft. The prompt is assembled
+  from the live node catalog and the DSL envelope, so a new node type reaches
+  the copilot with no second edit; every reply is round-tripped through the same
+  `validate_dsl` gate the editor and the compiler use, and a rejected draft is
+  repaired in a bounded loop that shows the model the exact validator errors.
+  A draft that is schema-valid but graph-invalid is returned with its verdict
+  rather than dropped, and cannot be applied. Drafts are never persisted: the
+  editor applies one through the normal save path as a single undoable canvas
+  change. The canvas gains an "AI Copilot" panel with a preview, node list,
+  validation report, model/usage readout, and an optional "modify the current
+  canvas" mode. The demo (mock) Provider answers the copilot prompt with a
+  canned but valid workflow, so the feature is demonstrable without an API key.
+- Google Gemini provider: a native `gemini` adapter for the Generative Language
+  API. Gemini is the one target the OpenAI-compatible client cannot cover — it
+  needs its own request envelope (`contents` / `systemInstruction` /
+  `generationConfig`), its own `x-goog-api-key` auth header, and its own SSE
+  shape — so a Gemini model config previously had to masquerade as an OpenAI
+  endpoint and silently lose the system prompt. The adapter maps the unified
+  message shapes onto Gemini's, hoists system messages into
+  `systemInstruction`, turns `json_mode` into
+  `generationConfig.responseMimeType`, and translates `functionCall` parts back
+  into the shared tool-call stream. Because Gemini repeats a cumulative
+  `usageMetadata` on every chunk, usage is emitted once at end of stream rather
+  than per chunk, which the shared merge step would otherwise sum into a
+  multiple of the real total. DeepSeek, vLLM and other OpenAI-compatible
+  servers keep using the `openai_compat` adapter with a custom base URL. The
+  provider list served by `GET /api/models` and
+  `/api/models/provider-capabilities` is derived from the registry, so no
+  contract change accompanied it.
+- Provider endpoint discovery: `POST /api/models/discover` lists the models an
+  endpoint actually serves, so adding a model config no longer means recalling a
+  vendor model id from memory. It speaks each adapter's own listing API — OpenAI
+  `/models`, Anthropic `/v1/models`, Gemini `/v1beta/models`, Ollama `/api/tags` —
+  and returns the ids with a chat/embedding hint inferred from the name, or from
+  Gemini's declared generation methods. The model dialog gained a "test
+  connection" action that probes the in-progress form and offers the result as a
+  picker instead of a free-text field; when editing, the stored key is reused
+  server-side so a secret never has to be retyped. Outbound calls reuse the
+  SSRF-safe transport, so the destination is pinned to pre-resolved public IPs
+  and a private target needs an explicit opt-in — which is what makes a locally
+  hosted Ollama reachable. An inline API key is used for the probe only and is
+  never persisted, and a vendor error that echoes the credential back is redacted
+  before it reaches the operator. The endpoint is admin-gated, carries its own
+  rate-limit budget, and records an audit event. The demo (mock) provider answers
+  from a canned catalog, so discovery is demonstrable without an API key.
+- Explicit load-balance strategy for the Agent model chain (backlog): every
+  Agent, tool-loop, and supervisor call now walks its model chain through the
+  new `AgentConfig.load_balance` field. `failover` (the default) keeps the
+  existing semantics — the chain is a strict preference order and the backups
+  only serve after a transient failure, circuit-open, or exhausted retry budget
+  on the entry ahead of them. `round_robin` treats the same chain as a
+  distribution pool: each call rotates the start point through a process-wide
+  cursor, so consecutive executions spread their requests (and their spend)
+  across every configured model instead of hammering the first one; a failure
+  still walks the remaining entries in order and emits the same
+  `provider_fallback` event, and a stream that has already produced its first
+  chunk is never switched. The rotation is deliberately per process, matching
+  the process-level model-call limits that already govern Provider traffic in
+  multi-worker deployments. The editor renders the strategy as a select on the
+  Agent node, and the field flows to `/api/node-types` and the copilot prompt
+  from the same schema, so no contract change accompanied it.
+- Usage export and billing reconciliation on the cost surface (C7-1). The
+  platform-wide metering hand-off and the month digest were API-only; the cost
+  governance page now exports raw `usage_daily_facts` for a window as CSV or
+  JSON and reads the deterministic reconciliation digest with its accumulated
+  totals, day count, and scope. The download goes through the credentialed
+  client wrapper and is buffered, so an expired session still refreshes and
+  retries like any other API call and a refusal lands as an inline message
+  instead of saving an error page; an inverted window, or one wider than the
+  server's 366-day limit, is refused before a request is spent.
+- CI and the backend suite now enforce migration-head parity: a new
+  `scripts/check_migration_head` step (plus a regular-suite test) fails the
+  build the moment `app.db.migrations.CURRENT_REVISION` stops matching the
+  alembic head, or the revision graph has more than one head.
+  `CURRENT_REVISION` gates three independent surfaces — the `/readyz`
+  migration check, the scheduler startup gate, and the event-relay startup
+  gate — so a new migration landing without the bump silently disabled all
+  three on every database already at head; that failure mode shipped once and
+  is now caught by the gate instead.
 
 ### Changed
 
@@ -171,6 +251,59 @@ date and add `Support through: YYYY-MM-DD`, exactly six months later.
 - SQLite workflow schedule dispatch now retries transient database-lock
   conflicts with bounded fresh-session backoff while preserving exactly-once
   slot claims; PostgreSQL and non-lock failures keep their prior behavior.
+- The cost-governance, project-quota, audit-log, and members surfaces, plus the
+  platform announcement strip, are now fully bilingual. Every label, empty
+  state, error message, and the 35 audit action names resolve through the shared
+  dictionaries — the action names live in a typed list, so an action added to
+  the backend before its translation still renders as its raw id instead of
+  leaking a translation key — and quota periods, member join dates, and ticket
+  counts follow the active locale's number and date formats. Page headings that
+  had stayed English brand marks (`AgentCanvas Cost Governance`,
+  `AgentCanvas Audit Log`, `AgentCanvas Quotas`) now match the navigation labels
+  they sit under.
+
+### Fixed
+
+- Application embeds load again in real browsers. The C8-3 security-headers
+  middleware stamps every response with `Cross-Origin-Resource-Policy:
+  same-origin`, and the floating-bubble bootstrap endpoint (which predates it)
+  did not override that default — so when an external host page followed the
+  embed snippet, the browser refused the script with
+  `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` and no bubble ever mounted. The
+  endpoint now declares `Cross-Origin-Resource-Policy: cross-origin`, which is
+  the whole point of the endpoint: serving that script to external pages is
+  its job, while the allow-list still governs which origins may frame the
+  runtime and the 403/404 gating still governs who gets the script at all.
+- The evaluations workspace is reachable again through the end-to-end gate.
+  The C5-1 shell redesign introduced a persistent global navigation landmark,
+  so `page.getByRole("complementary").first()` in the two evaluation
+  end-to-end paths resolved to the platform sidebar instead of the page's own
+  dataset list, and both tests had been timing out since. The dataset and
+  report panels now carry accessible names (`数据集列表` / `评测报告列表`),
+  which is the accessibility-correct fix, and the tests target the named
+  landmark instead of DOM order.
+- `Base.metadata.create_all` no longer fails on SQLite. The ORM declaration of
+  the PostgreSQL-only GIN expression index `ix_document_chunks_text_tsv`
+  (`to_tsvector('simple', text)`, added for autogenerate parity) was not
+  dialect-gated, so any SQLite `create_all` — the path used by several test
+  fixtures — emitted `CREATE INDEX ... (to_tsvector(...))` and died with
+  "no such function: to_tsvector". The Alembic migration `0035` always guarded
+  the index behind a PostgreSQL check; the metadata now matches that behavior
+  through before/after-create listeners that detach the index for the DDL on
+  non-PostgreSQL dialects and restore it afterwards, so autogenerate parity is
+  unchanged.
+- The workflow command bar no longer hides its own actions at desktop widths.
+  It was pinned to a single 56px row (`lg:h-14 lg:flex-nowrap`) while carrying
+  far more controls than fit: navigation, name, undo/redo, layout, object and
+  clipboard commands, collaboration state, six panel triggers, save, and run.
+  Past roughly 1200px the trailing cluster — the one holding `保存` and `运行` —
+  was squeezed to zero width by a `flex-1` wrapper with `overflow-x-auto`, so
+  the primary action was clipped out of reach, not merely scrolled. The bar now
+  wraps instead of clipping and the primary cluster is `shrink-0` outside the
+  scrolling wrapper, so `保存` and `运行` stay clickable at any width while the
+  secondary cluster gives up space first. This is what made the canvas,
+  collaboration, and SSE end-to-end specs fail with "intercepts pointer events"
+  at the default 1280×720 viewport.
 
 ### Security
 

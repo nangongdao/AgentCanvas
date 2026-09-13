@@ -64,7 +64,7 @@ async def test_capability_migration_backfills_downgrades_and_reapplies(
         await engine.dispose()
 
     await upgrade_database(settings)
-    assert CURRENT_REVISION == "0047_evaluation_policy"
+    assert CURRENT_REVISION == "2a2231226aa0"
     assert "capabilities_json" in await _columns(settings)
     engine = create_engine(settings)
     try:

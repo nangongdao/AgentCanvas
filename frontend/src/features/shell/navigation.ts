@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LibraryBig,
   MessageSquareText,
+  Package,
   ScrollText,
   Users,
   Workflow,
@@ -27,6 +28,7 @@ export type DestinationKey =
   | "apps"
   | "chat"
   | "cost"
+  | "marketplace"
   | "models"
   | "mcp"
   | "quotas"
@@ -45,6 +47,12 @@ export interface PlatformDestination {
    * lazy chunk so hover/focus/palette-highlight warms it before navigation.
    * Must swallow errors — prefetching is best-effort. */
   preload?: () => Promise<unknown>;
+}
+
+/** One route identity for both the rail and header, including saved canvases. */
+export function isDestinationActive(destination: PlatformDestination, pathname: string): boolean {
+  const base = destination.key === "workflows" ? "/workflows" : destination.to;
+  return pathname === base || (!destination.end && pathname.startsWith(`${base}/`));
 }
 
 export function destinationLabel(
@@ -125,6 +133,12 @@ export const WORKSPACE_DESTINATIONS: readonly PlatformDestination[] = [
     key: "chat",
     icon: MessageSquareText,
     preload: safePreload(() => import("@/features/chat/ChatPage")),
+  },
+  {
+    to: "/marketplace",
+    key: "marketplace",
+    icon: Package,
+    preload: safePreload(() => import("@/features/marketplace/MarketplacePage")),
   },
   {
     to: "/cost",

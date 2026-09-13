@@ -87,6 +87,9 @@ test("node drag and connected deletion each occupy one history step", async ({
   page,
   request,
 }) => {
+  // A physical multi-step drag plus undo/redo geometry polls sits close to
+  // the 30s default under full-suite load; align with the soft-lock test.
+  test.setTimeout(75_000);
   const errors = captureUnexpectedErrors(page);
   const workflow = await createWorkflow(
     request,

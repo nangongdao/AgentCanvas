@@ -22,8 +22,11 @@ test("global command palette opens from the shell and navigates search results b
     await expect(dialog).toBeVisible();
     await expect(input).toBeFocused();
     await expect(dialog.getByRole("option", { name: /新建工作流/ })).toBeVisible();
+    // Backward Tab from the first focusable (the input) wraps to the last
+    // option in the dialog, whatever the navigation registry ends with.
+    const options = dialog.getByRole("option");
     await page.keyboard.press("Shift+Tab");
-    await expect(dialog.getByRole("option", { name: /审计日志/ })).toBeFocused();
+    await expect(options.last()).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(input).toBeFocused();
 
@@ -172,10 +175,17 @@ test("safe commands execute while privileged destinations stay hidden from viewe
   await expect(dialog.getByRole("option", { name: /审计日志/ })).toBeHidden();
 
   const selected = dialog.locator('[role="option"][aria-selected="true"]');
+  // The option list is static until a query narrows it, so read its live ends
+  // first: End must land on whichever option currently closes the list and
+  // Home on whichever opens it, regardless of registry growth. Options carry
+  // stable ids, so compare identity instead of layout-sensitive text.
+  const paletteOptions = dialog.getByRole("option");
+  const lastOptionId = (await paletteOptions.last().getAttribute("id")) ?? "";
+  const firstOptionId = (await paletteOptions.first().getAttribute("id")) ?? "";
   await page.keyboard.press("End");
-  await expect(selected).toContainText("项目配额");
+  await expect(selected).toHaveAttribute("id", lastOptionId);
   await page.keyboard.press("Home");
-  await expect(selected).toContainText("复制当前页面链接");
+  await expect(selected).toHaveAttribute("id", firstOptionId);
   await page.keyboard.press("ArrowDown");
   await expect(selected).toContainText("运营概览");
   await page.keyboard.press("ArrowDown");

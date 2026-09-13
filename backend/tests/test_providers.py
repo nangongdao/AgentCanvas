@@ -1,4 +1,4 @@
-"""Tests for the anthropic and ollama provider stream mappings."""
+"""Tests for the anthropic, gemini and ollama provider stream mappings."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ import pytest
 
 from app.core.provider_capabilities import ProviderCapabilities
 from app.providers.anthropic_provider import AnthropicProvider
-from app.providers.base import ChatMessage, ToolSchema
+from app.providers.base import ChatMessage, ToolCall, ToolSchema
+from app.providers.gemini_provider import GeminiProvider
 from app.providers.mock_provider import MockChatProvider
 from app.providers.ollama_provider import OllamaProvider
 from app.providers.openai_provider import OpenAICompatProvider
@@ -156,7 +157,146 @@ async def test_ollama_provider_sends_system_and_tools(monkeypatch) -> None:
     assert captured["body"]["tools"][0]["function"]["name"] == "search"
 
 
-@pytest.mark.parametrize("provider_name", ["anthropic", "ollama"])
+def _make_gemini_sse(events: list[dict[str, Any]]) -> list[str]:
+    return [f"data: {_json.dumps(ev)}" for ev in events]
+
+
+async def test_gemini_provider_streams_text_and_usage(monkeypatch) -> None:
+    events: list[dict[str, Any]] = [
+        {"candidates": [{"content": {"role": "model", "parts": [{"text": "Hel"}]}}]},
+        {"candidates": [{"content": {"role": "model", "parts": [{"text": "lo"}]}}]},
+        {
+            "candidates": [{"content": {"role": "model", "parts": []}, "finishReason": "STOP"}],
+            "usageMetadata": {
+                "promptTokenCount": 5,
+                "candidatesTokenCount": 2,
+                "totalTokenCount": 7,
+            },
+        },
+    ]
+    provider = GeminiProvider(model="gemini-2.5-flash", api_key="test")
+    captured: dict[str, Any] = {}
+
+    def fake_stream(method, url, *, headers=None, json=None):  # noqa: ANN001
+        captured["url"] = url
+        captured["headers"] = headers
+        return _FakeStreamCM(_make_gemini_sse(events))
+
+    monkeypatch.setattr(provider._client, "stream", fake_stream)
+
+    chunks = [c async for c in provider.stream_chat([ChatMessage(role="user", content="hi")])]
+    assert "".join(c.text for c in chunks if c.type == "text") == "Hello"
+    usage = [c for c in chunks if c.type == "usage"]
+    # Gemini repeats a cumulative usageMetadata on every chunk; emitting it per
+    # chunk would make the base class sum it into a multiple of the real total.
+    assert len(usage) == 1
+    assert usage[0].usage is not None
+    assert usage[0].usage.total_tokens == 7
+    assert chunks[-1].type == "done"
+    assert "alt=sse" in captured["url"]
+    assert captured["headers"]["x-goog-api-key"] == "test"
+
+
+async def test_gemini_provider_sends_system_tools_and_generation_config(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_stream(method, url, *, headers=None, json=None):  # noqa: ANN001
+        captured["body"] = json
+        captured["url"] = url
+        return _FakeStreamCM(_make_gemini_sse([{"candidates": []}]))
+
+    provider = GeminiProvider(model="gemini-2.5-flash", api_key="test")
+    monkeypatch.setattr(provider._client, "stream", fake_stream)
+
+    tools = [
+        ToolSchema(name="search", description="d", parameters={"type": "object", "properties": {}})
+    ]
+    params = provider.prepare_params(
+        frozenset({"stream", "json_mode", "tools"}),
+        {"temperature": 0.2, "max_tokens": 64},
+    )
+    _ = [
+        c
+        async for c in provider.stream_chat(
+            [
+                ChatMessage(role="system", content="be brief"),
+                ChatMessage(role="user", content="find x"),
+            ],
+            tools=tools,
+            **params,
+        )
+    ]
+
+    body = captured["body"]
+    assert body["systemInstruction"]["parts"][0]["text"] == "be brief"
+    assert all(item["role"] != "system" for item in body["contents"])
+    assert body["contents"][0]["role"] == "user"
+    assert body["tools"][0]["functionDeclarations"][0]["name"] == "search"
+    config = body["generationConfig"]
+    assert config["temperature"] == 0.2
+    assert config["maxOutputTokens"] == 64
+    assert config["responseMimeType"] == "application/json"
+    assert "/v1beta/models/gemini-2.5-flash:streamGenerateContent" in captured["url"]
+
+
+async def test_gemini_provider_surfaces_function_calls(monkeypatch) -> None:
+    events: list[dict[str, Any]] = [
+        {
+            "candidates": [
+                {
+                    "content": {
+                        "role": "model",
+                        "parts": [{"functionCall": {"name": "search", "args": {"q": "x"}}}],
+                    }
+                }
+            ]
+        },
+    ]
+    provider = GeminiProvider(model="gemini-2.5-flash", api_key="test")
+
+    def fake_stream(method, url, *, headers=None, json=None):  # noqa: ANN001
+        return _FakeStreamCM(_make_gemini_sse(events))
+
+    monkeypatch.setattr(provider._client, "stream", fake_stream)
+
+    result = await provider.chat([ChatMessage(role="user", content="find x")])
+    assert result.tool_calls
+    assert result.tool_calls[0].name == "search"
+    assert _json.loads(result.tool_calls[0].arguments) == {"q": "x"}
+
+
+async def test_gemini_provider_maps_tool_result_to_function_response(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_stream(method, url, *, headers=None, json=None):  # noqa: ANN001
+        captured["body"] = json
+        return _FakeStreamCM(_make_gemini_sse([{"candidates": []}]))
+
+    provider = GeminiProvider(model="gemini-2.5-flash", api_key="test")
+    monkeypatch.setattr(provider._client, "stream", fake_stream)
+
+    _ = [
+        c
+        async for c in provider.stream_chat(
+            [
+                ChatMessage(role="user", content="find x"),
+                ChatMessage(
+                    role="assistant",
+                    tool_calls=(ToolCall(id="c1", name="search", arguments='{"q": "x"}'),),
+                ),
+                ChatMessage(role="tool", name="search", content="42", tool_call_id="c1"),
+            ]
+        )
+    ]
+    contents = captured["body"]["contents"]
+    assert contents[1]["parts"][0]["functionCall"]["name"] == "search"
+    assert contents[1]["parts"][0]["functionCall"]["args"] == {"q": "x"}
+    assert contents[2]["role"] == "user"
+    assert contents[2]["parts"][0]["functionResponse"]["name"] == "search"
+    assert contents[2]["parts"][0]["functionResponse"]["response"]["content"] == "42"
+
+
+@pytest.mark.parametrize("provider_name", ["anthropic", "gemini", "ollama"])
 def test_providers_registered(provider_name: str) -> None:
     from app.providers import PROVIDERS
 

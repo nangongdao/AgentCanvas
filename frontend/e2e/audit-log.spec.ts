@@ -42,7 +42,7 @@ test("admin audit workspace filters and traverses durable history", async ({
     await expect(auditLink).toBeVisible();
     await auditLink.click();
     await expect(page).toHaveURL(/\/settings\/audit$/);
-    await expect(page.getByText("AgentCanvas Audit Log", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "审计日志", exact: true })).toBeVisible();
 
     const rows = page.locator('section[aria-label="审计事件"] article');
     await expect(rows).toHaveCount(50);
@@ -103,7 +103,7 @@ test("viewer cannot discover or open the audit workspace", async ({ page }) => {
 
   await page.goto("/audit");
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("AgentCanvas Audit Log", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "审计日志", exact: true })).toHaveCount(0);
   expect(errors.pageErrors).toEqual([]);
   expect(errors.consoleErrors).toEqual([]);
   expect(errors.httpErrors).toEqual([]);

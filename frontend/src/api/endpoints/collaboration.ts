@@ -2,6 +2,7 @@
 
 import { apiGet, apiSend } from "@/api/client";
 import { withQuery } from "@/api/pagination";
+import { backendUrl } from "@/api/backendOrigin";
 
 export interface CollaborationPresenceDTO {
   client_id: string;
@@ -88,7 +89,7 @@ export function leaveWorkflowCollaborationKeepalive(
   clientId: string,
 ): void {
   void fetch(
-    `${basePath(workflowId)}/presence/${encodeURIComponent(clientId)}`,
+    backendUrl(`${basePath(workflowId)}/presence/${encodeURIComponent(clientId)}`),
     {
       method: "DELETE",
       credentials: "include",

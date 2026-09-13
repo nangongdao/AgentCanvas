@@ -14,7 +14,7 @@ from app.core.config import BACKEND_DIR, Settings, validate_runtime_settings
 from app.db.base import create_engine
 
 BASELINE_REVISION = "0001_p0_p3"
-CURRENT_REVISION = "0047_evaluation_policy"
+CURRENT_REVISION = "2a2231226aa0"
 BASELINE_TABLES = frozenset(
     {"workflows", "executions", "execution_events", "model_configs", "mcp_servers"}
 )

@@ -478,8 +478,7 @@ test("versioned dataset runs a published workflow and exposes an auditable repor
     expect(createdDatasetResponse.status()).toBe(201);
     const datasetName = `Dataset ${suffix}`;
     await page
-      .getByRole("complementary")
-      .first()
+      .getByRole("complementary", { name: "数据集列表" })
       .getByRole("button", { name: new RegExp(`^${datasetName}`) })
       .click();
     await expect(page.getByRole("heading", { name: datasetName, exact: true })).toBeVisible();
@@ -762,8 +761,7 @@ test("knowledge ingestion, retrieval, RAG execution, and citations stay connecte
     const publishedVersion = (await publishedResponse.json()) as { id: string };
     await page.goto("/evaluations");
     await page
-      .getByRole("complementary")
-      .first()
+      .getByRole("complementary", { name: "数据集列表" })
       .getByRole("button", { name: new RegExp(`^${datasetName}`) })
       .click();
     await expect(page.getByRole("heading", { name: datasetName, exact: true })).toBeVisible();

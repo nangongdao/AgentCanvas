@@ -9,6 +9,7 @@ const LABELS: Record<string, string> = {
   input_schema: "输入字段",
   model_config_id: "模型配置",
   fallback_model_config_ids: "备用模型链",
+  load_balance: "负载均衡",
   agent_mode: "Agent 模式",
   system_prompt: "系统提示词",
   user_prompt: "用户提示词",

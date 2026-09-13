@@ -53,7 +53,7 @@ flowchart TB
     end
 
     subgraph EXT["外部能力"]
-        Prov["Provider Registry<br/>OpenAI 兼容 / Anthropic / Ollama"]
+        Prov["Provider Registry<br/>OpenAI 兼容 / Anthropic / Gemini / Ollama"]
         MCP["McpConnectionManager<br/>stdio / SSE / streamable-http"]
         RAG["向量检索<br/>Chroma / pgvector / SQL"]
     end
@@ -73,11 +73,11 @@ flowchart TB
     Bus -.->|事件中继| Redis
     Graph --> DB
 
-    style FE fill:#0a0e18,stroke:#22d3ee,color:#e8ecf4
-    style BE fill:#0a0e18,stroke:#6e56cf,color:#e8ecf4
-    style LG fill:#0a0e18,stroke:#22c55e,color:#e8ecf4
-    style EXT fill:#0a0e18,stroke:#f59e0b,color:#e8ecf4
-    style ST fill:#0a0e18,stroke:#8b93a7,color:#e8ecf4
+    style FE fill:#0b0e1c,stroke:#22d3ee,color:#eaeefb
+    style BE fill:#0b0e1c,stroke:#6e56cf,color:#eaeefb
+    style LG fill:#0b0e1c,stroke:#22c55e,color:#eaeefb
+    style EXT fill:#0b0e1c,stroke:#f59e0b,color:#eaeefb
+    style ST fill:#0b0e1c,stroke:#909ab2,color:#eaeefb
 ```
 
 三个关键设计决策,理由比选择本身更重要:
@@ -152,13 +152,34 @@ sequenceDiagram
 
 ## 快速开始
 
-### 前置
+### 方式一：一键启动（推荐）
 
+```bash
+# Linux/macOS
+bash scripts/dev-start.sh
+
+# Windows
+scripts\dev-start.bat
+```
+
+脚本会自动检查依赖、安装、迁移数据库并启动前后端服务。
+
+### 方式二：Dev Container（VS Code）
+
+1. 安装 Docker Desktop 和 VS Code Remote - Containers 插件
+2. 打开项目，点击 "Reopen in Container"
+3. 容器内执行 `bash scripts/dev-start.sh`
+
+**包含**：Python 3.12、Node 20、PostgreSQL 17、Redis
+
+### 方式三：手动启动
+
+**前置要求**：
 - Python 3.12+(开发与 CI 实跑 3.13)
 - Node 20+ / pnpm
 - uv(`pip install uv`,本机用 `python -m uv` 调用)
 
-### 环境变量
+**环境变量**：
 
 复制 `.env.example` 为 `.env`,填入 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 与 `SECRET_KEY`。
 
@@ -168,7 +189,7 @@ sequenceDiagram
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### 后端
+**后端**：
 
 ```bash
 cd backend && python -m uv sync && python -m uv run uvicorn app.main:app --reload --port 8000
@@ -176,7 +197,7 @@ cd backend && python -m uv sync && python -m uv run uvicorn app.main:app --reloa
 
 就绪探针 <http://127.0.0.1:8000/readyz> 会逐项报告 database / migrations / checkpointer / config / vector_store / sandbox,任一不可用返回 503。
 
-### 前端
+**前端**：
 
 ```bash
 cd frontend && pnpm install && pnpm dev
@@ -184,7 +205,7 @@ cd frontend && pnpm install && pnpm dev
 
 打开 <http://127.0.0.1:5173>(`/api` 与 `/healthz` 已代理到后端)。
 
-### 灌入演示数据(可选)
+**演示数据**（可选）：
 
 ```bash
 cd backend && python -m uv run python -m app.services
@@ -192,11 +213,22 @@ cd backend && python -m uv run python -m app.services
 
 会写入演示工作流;已存在的行不动。
 
+完整开发环境指南见 [docs/quick-start.md](docs/quick-start.md)。
+
 ### 密钥引用
 
 模型 API Key 与 MCP 的 env/header 支持直接值或受限引用:`env://UPPER_CASE_NAME`、`docker://relative-file`、`external://path`。引用经 Fernet 加密保存,列表与编辑界面只返回掩码/来源,**运行时才解析** —— 所以轮换环境变量、Docker secret 或外部服务里的值都不用改库。
 
 `docker://` 只读 `DOCKER_SECRET_DIR` 下的有界 UTF-8 文件;`external://` 需要宿主通过 `create_app(..., external_secret_resolver=...)` 显式注入适配器,默认未配置时 fail closed,不会隐式访问网络、也不把进程环境当 fallback。
+
+### 开发工具
+
+项目已配置完整的开发环境工具：
+
+- **VS Code 调试配置**：8 个调试配置（FastAPI、Worker、Tests、Frontend、E2E 等）+ 2 个组合（Full Stack、Backend + Worker）
+- **数据库管理**：支持 DBeaver、TablePlus、pgAdmin，常用查询见 [docs/database-tools.md](docs/database-tools.md)
+- **一键启动脚本**：`scripts/dev-start.sh` (Linux/macOS) 和 `dev-start.bat` (Windows)
+- **Dev Container**：完整容器化开发环境（Python 3.12、Node 20、PostgreSQL 17、Redis）
 
 ## 部署
 
@@ -214,11 +246,11 @@ flowchart LR
     RL --> R
     Once["一次性 migrate + bootstrap"] -.->|发布期写入| PG
 
-    style Nginx fill:#0a0e18,stroke:#22d3ee,color:#e8ecf4
-    style API1 fill:#0a0e18,stroke:#6e56cf,color:#e8ecf4
-    style W fill:#0a0e18,stroke:#22c55e,color:#e8ecf4
-    style PG fill:#0a0e18,stroke:#8b93a7,color:#e8ecf4
-    style R fill:#0a0e18,stroke:#8b93a7,color:#e8ecf4
+    style Nginx fill:#0b0e1c,stroke:#22d3ee,color:#eaeefb
+    style API1 fill:#0b0e1c,stroke:#6e56cf,color:#eaeefb
+    style W fill:#0b0e1c,stroke:#22c55e,color:#eaeefb
+    style PG fill:#0b0e1c,stroke:#909ab2,color:#eaeefb
+    style R fill:#0b0e1c,stroke:#909ab2,color:#eaeefb
 ```
 
 ```bash
@@ -318,6 +350,7 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 
 | 文档 | 内容 |
 |---|---|
+| [DESIGN.md](DESIGN.md) | 视觉与交互的单一事实源(awesome-design-md / Stitch 格式) |
 | [plan.md](docs/plan.md) | 总体设计与阶段规划(架构单一事实源) |
 | [progress.md](docs/progress.md) | 逐阶段实现细节与门禁证据 |
 | [c9-desktop-tauri-plan.md](docs/c9-desktop-tauri-plan.md) | C9 桌面化实施计划 |
@@ -329,7 +362,66 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 | [version-support-policy.md](docs/version-support-policy.md) | 版本兼容与支持窗口 |
 | [contracts/](contracts/) | OpenAPI · Workflow DSL · 执行事件 schema |
 
-设计系统的单一事实源是 [design-system/MASTER.md](design-system/MASTER.md) —— 改 UI 前先读它。
+设计系统的单一事实源是仓库根目录的 [DESIGN.md](DESIGN.md)(awesome-design-md / Stitch 格式,可直接交给编码智能体);[design-system/preview.html](design-system/preview.html) 是它的可视化对照页(色板 / 字阶 / 控件 / 导航 / 面板 / 投影阶梯,含深色与浅色切换),[design-system/MASTER.md](design-system/MASTER.md) 是生成摘要。改 UI 前先读 DESIGN.md。
+
+## SDK
+
+### Python SDK
+
+```bash
+pip install agentcanvas
+```
+
+```python
+from agentcanvas import AgentCanvasClient, CreateWorkflowInput
+
+with AgentCanvasClient(api_key="your-key", base_url="http://localhost:8000") as client:
+    workflow = client.create_workflow(
+        CreateWorkflowInput(name="Example", nodes=[...], edges=[...])
+    )
+    execution = client.start_execution(workflow.id, inputs={"query": "hello"})
+    print(f"Status: {execution.status}")
+```
+
+完整文档:[sdk/python/README.md](sdk/python/README.md)
+
+### TypeScript/JavaScript SDK
+
+```bash
+npm install agentcanvas
+```
+
+```typescript
+import { AgentCanvasClient } from 'agentcanvas';
+
+const client = new AgentCanvasClient({
+  apiKey: 'your-key',
+  baseURL: 'http://localhost:8000'
+});
+
+const workflow = await client.workflows.create({
+  name: 'Example',
+  nodes: [...],
+  edges: [...]
+});
+
+const execution = await client.executions.start({
+  workflowId: workflow.id,
+  inputs: { query: 'hello' }
+});
+```
+
+完整文档:[sdk/typescript/README.md](sdk/typescript/README.md)
+
+### CLI 工具
+
+```bash
+pip install agentcanvas-cli
+agentcanvas init my-project
+cd my-project && agentcanvas dev
+```
+
+支持项目初始化、本地开发服务器、数据库迁移、备份恢复。文档:[cli/README.md](cli/README.md)
 
 ## 技术栈
 
@@ -337,7 +429,13 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 
 **后端** Python 3.12+ · FastAPI · LangGraph 1.x · 官方 MCP SDK 2.x · SQLAlchemy 2 + Alembic · Chroma / pgvector · Redis · OpenTelemetry · pytest
 
-**LLM Provider** OpenAI 兼容协议 · Anthropic Messages API · Ollama
+**SDK** Python 3.9+ · TypeScript/JavaScript · CLI 工具
+
+**LLM Provider** OpenAI 兼容协议(含 DeepSeek / vLLM 等) · Anthropic Messages API · Google Gemini · Ollama
 
 **部署** Docker Compose · nginx · PostgreSQL 17 · GitHub Actions · Trivy
+
+## 许可与说明
+
+本项目作为公开技术演示与作品集项目发布。仓库仅包含代码与公开技术文档,不含内部开发规划、商业路线图或部署凭据。
 

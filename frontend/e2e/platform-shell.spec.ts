@@ -97,8 +97,8 @@ test("canonical settings pages remain reachable and pass serious axe checks", as
   const destinations = [
     ["模型与供应商", /\/settings\/models$/, "AgentCanvas Models"],
     ["MCP", /\/settings\/mcp$/, "MCP Catalog Control"],
-    ["项目配额", /\/settings\/quotas$/, "AgentCanvas Quotas"],
-    ["审计日志", /\/settings\/audit$/, "AgentCanvas Audit Log"],
+    ["项目配额", /\/settings\/quotas$/, "项目配额"],
+    ["审计日志", /\/settings\/audit$/, "审计日志"],
   ] as const;
 
   for (const [linkName, url, heading] of destinations) {

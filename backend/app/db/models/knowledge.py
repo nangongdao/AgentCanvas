@@ -18,6 +18,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -132,6 +134,14 @@ class DocumentChunk(Base):
             name="ck_document_chunks_dimensions",
         ),
         Index("ix_document_chunks_kb_document", "kb_id", "document_id"),
+        # GIN expression index for PostgreSQL hybrid retrieval (0035). Declared
+        # here so autogenerate sees the migrated PG schema as in sync; SQLite
+        # ranks keyword candidates in process and never creates this index.
+        Index(
+            "ix_document_chunks_text_tsv",
+            text("to_tsvector('simple', text)"),
+            postgresql_using="gin",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
@@ -164,6 +174,34 @@ class DocumentChunk(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+
+
+_TSV_INDEX_NAME = "ix_document_chunks_text_tsv"
+
+
+@event.listens_for(DocumentChunk.__table__, "before_create")
+def _detach_tsv_index_off_postgresql(target, connection, **_kw) -> None:
+    """Skip the PostgreSQL GIN expression index when creating tables elsewhere.
+
+    SQLite has no ``to_tsvector``, so ``create_all`` against a SQLite engine
+    would fail on it (0035 creates it only behind a PostgreSQL guard). The
+    index stays in the metadata — autogenerate on PostgreSQL still sees it —
+    and is restored after the DDL so later connections are unaffected.
+    """
+    if connection.dialect.name == "postgresql":
+        return
+    tsv_index = next(index for index in target.indexes if index.name == _TSV_INDEX_NAME)
+    target.indexes.discard(tsv_index)
+    target.info.setdefault("_detached_tsv_index", []).append(tsv_index)
+
+
+@event.listens_for(DocumentChunk.__table__, "after_create")
+def _reattach_tsv_index_off_postgresql(target, connection, **_kw) -> None:
+    if connection.dialect.name == "postgresql":
+        return
+    for tsv_index in target.info.get("_detached_tsv_index", []):
+        target.indexes.add(tsv_index)
+    target.info.pop("_detached_tsv_index", None)
 
 
 class IngestJob(Base):

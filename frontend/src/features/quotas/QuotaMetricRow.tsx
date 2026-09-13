@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useT } from "@/features/i18n/i18n";
 import { cn } from "@/utils/cn";
 
 export interface QuotaMetricView {
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function QuotaMetricRow({ metric, editing, disabled, onDraftChange }: Props) {
+  const t = useT();
   const tone = TONES[metric.tone];
   const pressureTone =
     metric.ratio !== null && metric.ratio >= 100
@@ -64,13 +66,13 @@ export function QuotaMetricRow({ metric, editing, disabled, onDraftChange }: Pro
       <div className="min-w-0">
         <div className="mb-2 flex items-end justify-between gap-3">
           <div>
-            <span className="font-mono text-[9px] uppercase text-ghost/50">已用</span>
+            <span className="font-mono text-[9px] uppercase text-ghost/50">{t("quotas.used")}</span>
             <p className="mt-0.5 truncate font-display text-lg font-semibold text-ice">
               {metric.usage}
             </p>
           </div>
           <span className={cn("font-mono text-[10px]", pressureTone.text)}>
-            {metric.ratio === null ? "UNLIMITED" : `${Math.round(metric.ratio)}%`}
+            {metric.ratio === null ? t("quotas.unlimited") : `${Math.round(metric.ratio)}%`}
           </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-line">
@@ -86,7 +88,7 @@ export function QuotaMetricRow({ metric, editing, disabled, onDraftChange }: Pro
           <label className="flex min-h-11 shrink-0 items-center gap-2 px-1 text-xs text-ghost">
             <input
               type="checkbox"
-              aria-label={`${metric.label}无限`}
+              aria-label={`${metric.label}${t("quotas.unlimited")}`}
               checked={metric.draft === null}
               disabled={disabled}
               onChange={(event) =>
@@ -94,7 +96,7 @@ export function QuotaMetricRow({ metric, editing, disabled, onDraftChange }: Pro
               }
               className="h-4 w-4 accent-cyan-400"
             />
-            无限
+            {t("quotas.unlimited")}
           </label>
           {metric.draft !== null && (
             <label className="min-w-0 flex-1 sm:max-w-48">
@@ -115,11 +117,11 @@ export function QuotaMetricRow({ metric, editing, disabled, onDraftChange }: Pro
       ) : (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-right">
           <div>
-            <dt className="font-mono text-[9px] uppercase text-ghost/45">上限</dt>
+            <dt className="font-mono text-[9px] uppercase text-ghost/45">{t("quotas.limit")}</dt>
             <dd className="mt-1 truncate text-xs text-ice">{metric.limit}</dd>
           </div>
           <div>
-            <dt className="font-mono text-[9px] uppercase text-ghost/45">剩余</dt>
+            <dt className="font-mono text-[9px] uppercase text-ghost/45">{t("quotas.remaining")}</dt>
             <dd className={cn("mt-1 truncate text-xs", pressureTone.text)}>
               {metric.remaining}
             </dd>

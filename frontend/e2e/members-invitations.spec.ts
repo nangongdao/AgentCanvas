@@ -30,8 +30,15 @@ test("members page issues invitation link that a new user accepts", async (
   const inviteeEmail = `members-invitee-${suffix}@example.test`;
 
   // Owner account and organization are created over the API; the owner's
-  // session cookie lives on the request context.
+  // session cookie lives on the request context. Registration goes through the
+  // seeded admin token rather than the first-user bootstrap — the singleton
+  // bootstrap slot is claimed by whichever spec registers first (app-embed and
+  // the other specs that use this fixture run earlier), which made an
+  // anonymous registration here order-dependent. Without bootstrap the
+  // register response sets no session cookie, so the owner logs in to put one
+  // on the context before creating its organization.
   const owner = await request.post(`${API_URL}/api/auth/register`, {
+    headers: adminHeaders,
     data: {
       email: ownerEmail,
       password: PASSWORD,
@@ -40,6 +47,10 @@ test("members page issues invitation link that a new user accepts", async (
     },
   });
   expect(owner.status()).toBe(201);
+  const ownerLogin = await request.post(`${API_URL}/api/auth/login`, {
+    data: { email: ownerEmail, password: PASSWORD },
+  });
+  expect(ownerLogin.status()).toBe(200);
   const org = await request.post(`${API_URL}/api/organizations`, {
     data: { name: `Members Org ${suffix}` },
   });

@@ -1,376 +1,254 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Activity,
-  CircleDollarSign,
-  FolderKanban,
-  Gauge,
-  Loader2,
-  Plus,
-  RefreshCw,
-  TriangleAlert,
-  Workflow,
-} from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Activity, CircleDollarSign, Clock3, FolderKanban, Gauge, Loader2, Plus, RefreshCw, TriangleAlert, Workflow } from "lucide-react";
+import { Link } from "react-router-dom";
 
-import { getOverview, type OverviewDTO } from "@/api/endpoints/overview";
+import type { ProjectQuotaDTO } from "@/api/endpoints/projectQuotas";
+import { useI18nStore, useT, type Translate } from "@/features/i18n/i18n";
+import { CostTrendPanel } from "@/features/overview/OverviewCostChart";
 import {
-  getProjectQuotas,
-  listProjects,
-  type ProjectDTO,
-  type ProjectQuotaDTO,
-} from "@/api/endpoints/projectQuotas";
-import { useAuth } from "@/features/auth/AuthProvider";
-import {
-  CostTrendPanel,
   QuotaWaterlinePanel,
   RecentWorkflowsPanel,
+  WorkspaceShortcuts,
   type OverviewQuotaRow,
   quotaUsageRatio,
 } from "@/features/overview/OverviewPanels";
+import { useOverviewData, type OverviewRequestFailure } from "@/features/overview/useOverviewData";
 import { cn } from "@/utils/cn";
 
-const moneyFormat = new Intl.NumberFormat("zh-CN", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 6,
-});
-const numberFormat = new Intl.NumberFormat("zh-CN");
-
-function money(value: string | null) {
-  if (value === null) return "待定价";
-  return moneyFormat.format(Number(value));
-}
-
-function quotaRows(quota: ProjectQuotaDTO | null): OverviewQuotaRow[] {
+function quotaRows(
+  quota: ProjectQuotaDTO | null,
+  t: Translate,
+  money: (value: string | null) => string,
+  numberFormat: Intl.NumberFormat,
+): OverviewQuotaRow[] {
   if (!quota) return [];
+  const bytes = (value: number) => `${numberFormat.format(value)} B`;
   return [
     {
-      label: "模型费用",
+      label: t("overview.modelCost"),
       usage: Number(quota.model_cost_usd),
-      limit:
-        quota.monthly_model_cost_usd_limit === null
-          ? null
-          : Number(quota.monthly_model_cost_usd_limit),
+      limit: quota.monthly_model_cost_usd_limit === null ? null : Number(quota.monthly_model_cost_usd_limit),
       display: money(quota.model_cost_usd),
-      limitDisplay:
-        quota.monthly_model_cost_usd_limit === null
-          ? "无限"
-          : money(quota.monthly_model_cost_usd_limit),
+      limitDisplay: quota.monthly_model_cost_usd_limit === null ? t("overview.unlimited") : money(quota.monthly_model_cost_usd_limit),
       tone: "bg-volt",
     },
     {
-      label: "存储",
+      label: t("overview.storage"),
       usage: quota.storage_bytes,
       limit: quota.storage_bytes_limit,
-      display: `${numberFormat.format(quota.storage_bytes)} B`,
-      limitDisplay:
-        quota.storage_bytes_limit === null
-          ? "无限"
-          : `${numberFormat.format(quota.storage_bytes_limit)} B`,
+      display: bytes(quota.storage_bytes),
+      limitDisplay: quota.storage_bytes_limit === null ? t("overview.unlimited") : bytes(quota.storage_bytes_limit),
       tone: "bg-pulse",
     },
     {
       label: "Embedding",
       usage: quota.embedding_input_bytes,
       limit: quota.monthly_embedding_input_bytes_limit,
-      display: `${numberFormat.format(quota.embedding_input_bytes)} B`,
-      limitDisplay:
-        quota.monthly_embedding_input_bytes_limit === null
-          ? "无限"
-          : `${numberFormat.format(quota.monthly_embedding_input_bytes_limit)} B`,
+      display: bytes(quota.embedding_input_bytes),
+      limitDisplay: quota.monthly_embedding_input_bytes_limit === null ? t("overview.unlimited") : bytes(quota.monthly_embedding_input_bytes_limit),
       tone: "bg-ok",
     },
     {
-      label: "并发执行",
+      label: t("overview.concurrent"),
       usage: quota.concurrent_executions,
       limit: quota.concurrent_execution_limit,
       display: numberFormat.format(quota.concurrent_executions),
-      limitDisplay:
-        quota.concurrent_execution_limit === null
-          ? "无限"
-          : numberFormat.format(quota.concurrent_execution_limit),
-      tone: "bg-warn",
+      limitDisplay: quota.concurrent_execution_limit === null ? t("overview.unlimited") : numberFormat.format(quota.concurrent_execution_limit),
+      tone: "bg-pulse",
     },
     {
-      label: "MCP 进程",
+      label: t("overview.mcpProcesses"),
       usage: quota.stdio_mcp_processes,
       limit: quota.stdio_mcp_process_limit,
       display: numberFormat.format(quota.stdio_mcp_processes),
-      limitDisplay:
-        quota.stdio_mcp_process_limit === null
-          ? "无限"
-          : numberFormat.format(quota.stdio_mcp_process_limit),
-      tone: "bg-bad",
+      limitDisplay: quota.stdio_mcp_process_limit === null ? t("overview.unlimited") : numberFormat.format(quota.stdio_mcp_process_limit),
+      tone: "bg-volt",
     },
   ];
 }
 
+function failureMessage(failure: OverviewRequestFailure | null, fallback: string): string | null {
+  if (!failure) return null;
+  return failure.cause instanceof Error ? failure.cause.message : fallback;
+}
+
 export function OverviewPage() {
-  const { ready } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [projects, setProjects] = useState<ProjectDTO[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [overview, setOverview] = useState<OverviewDTO | null>(null);
-  const [quota, setQuota] = useState<ProjectQuotaDTO | null>(null);
-  const [loadingProjects, setLoadingProjects] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [projectError, setProjectError] = useState<string | null>(null);
-  const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [quotaError, setQuotaError] = useState<string | null>(null);
-  const requestGeneration = useRef(0);
-  const requestedProjectId = searchParams.get("project_id") ?? "";
-  const resolvedProjectId = projects.some((project) => project.id === requestedProjectId)
-    ? requestedProjectId
-    : (projects[0]?.id ?? "");
-  const selectionReady =
-    !loadingProjects && selectedProjectId === resolvedProjectId;
-
-  useEffect(() => {
-    if (!ready) return;
-    let active = true;
-    requestGeneration.current += 1;
-    setLoadingProjects(true);
-    setProjectError(null);
-    void listProjects()
-      .then((rows) => {
-        if (!active) return;
-        setProjects(rows);
-      })
-      .catch((cause: unknown) => {
-        if (active) {
-          setProjectError(cause instanceof Error ? cause.message : "加载项目失败");
-        }
-      })
-      .finally(() => {
-        if (active) setLoadingProjects(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [ready]);
-
-  useEffect(() => {
-    if (loadingProjects) return;
-    if (resolvedProjectId !== requestedProjectId) {
-      const updated = new URLSearchParams(searchParams);
-      if (resolvedProjectId) updated.set("project_id", resolvedProjectId);
-      else updated.delete("project_id");
-      setSearchParams(updated, { replace: true });
-    }
-    if (selectedProjectId === resolvedProjectId) return;
-    requestGeneration.current += 1;
-    setSelectedProjectId(resolvedProjectId);
-    setOverview(null);
-    setQuota(null);
-    setLoading(true);
-    setOverviewError(null);
-    setQuotaError(null);
-  }, [
-    loadingProjects,
-    requestedProjectId,
-    resolvedProjectId,
-    searchParams,
-    selectedProjectId,
-    setSearchParams,
-  ]);
-
-  const reload = useCallback(async (projectId: string) => {
-    const generation = ++requestGeneration.current;
-    setLoading(true);
-    setOverviewError(null);
-    setQuotaError(null);
-    const [overviewResult, quotaResult] = await Promise.allSettled([
-      getOverview(projectId || undefined),
-      projectId ? getProjectQuotas(projectId) : Promise.resolve(null),
-    ]);
-    if (generation !== requestGeneration.current) return;
-    if (overviewResult.status === "fulfilled") {
-      setOverview(overviewResult.value);
-    } else {
-      setOverview(null);
-      setOverviewError(
-        overviewResult.reason instanceof Error
-          ? overviewResult.reason.message
-          : "加载运营概览失败",
-      );
-    }
-    if (quotaResult.status === "fulfilled") {
-      setQuota(quotaResult.value);
-    } else {
-      setQuota(null);
-      setQuotaError(
-        quotaResult.reason instanceof Error
-          ? quotaResult.reason.message
-          : "加载项目配额失败",
-      );
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (selectionReady) void reload(selectedProjectId);
-  }, [reload, selectedProjectId, selectionReady]);
-
-  const selectProject = (projectId: string) => {
-    requestGeneration.current += 1;
-    setSelectedProjectId(projectId);
-    setOverview(null);
-    setQuota(null);
-    setLoading(true);
-    setOverviewError(null);
-    setQuotaError(null);
-    const updated = new URLSearchParams(searchParams);
-    if (projectId) updated.set("project_id", projectId);
-    else updated.delete("project_id");
-    setSearchParams(updated, { replace: true });
+  const t = useT();
+  const locale = useI18nStore((state) => state.locale);
+  const {
+    projects, selectedProjectId, selectProject, overview, quota,
+    loadingProjects, busy, projectError, overviewError, quotaError, refresh,
+  } = useOverviewData();
+  const numberLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const numberFormat = new Intl.NumberFormat(numberLocale);
+  const moneyFormat = new Intl.NumberFormat(numberLocale, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
+  const money = (value: string | null) => {
+    if (value === null) return t("overview.unpriced");
+    const amount = Number(value);
+    return Number.isFinite(amount) ? moneyFormat.format(amount) : t("overview.unavailable");
   };
-
-  const quotas = useMemo(() => quotaRows(quota), [quota]);
-  const quotaWaterline = useMemo(() => {
-    const finite = quotas
-      .map((row) => quotaUsageRatio(row.usage, row.limit))
-      .filter((value): value is number => value !== null);
-    return finite.length ? Math.max(...finite) : null;
-  }, [quotas]);
+  const quotas = quotaRows(quota, t, money, numberFormat);
+  const finiteRatios = quotas.map((row) => quotaUsageRatio(row.usage, row.limit)).filter((value): value is number => value !== null);
+  const quotaWaterline = finiteRatios.length ? Math.max(...finiteRatios) : null;
   const summary = overview?.execution_summary;
-  const errors = [projectError, overviewError, quotaError].filter(
-    (value): value is string => value !== null,
-  );
-  const quotaEmptyLabel = quotaError
-    ? "配额数据不可用"
-    : selectedProjectId
-      ? "暂无配额数据"
-      : "未选择项目";
+  const unavailable = Boolean(projectError || overviewError);
+  const unavailableQuota = Boolean(projectError || quotaError);
+  const missingDetail = t(unavailable ? "overview.unavailable" : "overview.waiting");
+  const errors = [
+    failureMessage(projectError, t("overview.projectsFailed")),
+    failureMessage(overviewError, t("overview.loadFailed")),
+    failureMessage(quotaError, t("overview.loadQuotaFailed")),
+  ].filter((message): message is string => message !== null);
+  const quotaEmptyLabel = unavailableQuota
+    ? t("overview.quotaUnavailable")
+    : busy ? t("overview.loading")
+      : selectedProjectId ? t("overview.noQuota") : t("overview.noProject");
+  const metrics = [
+    {
+      key: "success",
+      label: t("overview.successRate"),
+      value: summary?.success_rate == null ? "—" : `${Math.round(summary.success_rate * 100)}%`,
+      detail: summary ? t("overview.successDetail", { succeeded: numberFormat.format(summary.succeeded), failed: numberFormat.format(summary.failed) }) : missingDetail,
+      icon: Activity,
+      tone: "text-ok",
+    },
+    {
+      key: "executions",
+      label: t("overview.executions"),
+      value: summary ? numberFormat.format(summary.total) : "—",
+      detail: summary ? t("overview.activeDetail", { count: numberFormat.format(summary.active) }) : missingDetail,
+      icon: Workflow,
+      tone: "text-pulse",
+    },
+    {
+      key: "cost",
+      label: t("overview.estimatedCost"),
+      value: overview ? money(overview.cost_known ? overview.estimated_cost_usd : null) : "—",
+      detail: overview ? t(overview.cost_known ? "overview.priced" : "overview.unpricedCalls") : missingDetail,
+      icon: CircleDollarSign,
+      tone: "text-volt",
+    },
+    {
+      key: "quota",
+      label: t("overview.quota"),
+      value: unavailableQuota ? t("overview.unavailable") : quota ? quotaWaterline === null ? t("overview.notConfigured") : `${Math.round(quotaWaterline * 100)}%` : "—",
+      detail: unavailableQuota ? t("overview.quotaFailed") : quota ? t("overview.highestUsage") : quotaEmptyLabel,
+      icon: Gauge,
+      tone: quotaWaterline !== null && quotaWaterline >= 0.8 ? "text-warn" : "text-ghost",
+    },
+  ];
 
   return (
-    <main className="ambient-stage h-full min-w-0 overflow-y-auto bg-void text-ice">
-      <div className="relative z-10 mx-auto w-full max-w-[1440px]">
-        <header role="presentation" className="flex min-h-20 flex-col gap-3 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:px-6">
+    <main className="workspace-overview h-full min-w-0 overflow-y-auto text-ice" aria-busy={busy}>
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <header className="workspace-reveal flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
-            <p className="font-mono text-[9px] uppercase text-pulse">Operations / 7 days</p>
-            <h1 className="mt-1 font-display text-xl font-semibold text-ice">工作台概览</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-pulse" aria-hidden="true" />
+                <span className="workspace-eyebrow text-pulse">{t("overview.eyebrow")}</span>
+              </span>
+              <span className="workspace-badge">
+                <Clock3 size={11} aria-hidden="true" />{t("overview.period")}
+              </span>
+            </div>
+            <h1 className="workspace-display-title mt-3">{t("overview.title")}</h1>
+            <p className="mt-2.5 max-w-xl text-xs leading-relaxed text-ghost sm:text-[13px]">{t("overview.description")}</p>
           </div>
-          <div className="flex min-w-0 items-center gap-2 sm:ml-auto">
-            <label className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
-              <FolderKanban
-                size={13}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pulse"
-              />
+          <div className="flex min-w-0 items-center gap-2">
+            <label className="relative min-w-0 flex-1 sm:w-52 sm:flex-none">
+              <FolderKanban size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ghost" aria-hidden="true" />
               <select
-                aria-label="概览项目范围"
+                aria-label={t("overview.projectScope")}
                 value={selectedProjectId}
                 onChange={(event) => selectProject(event.target.value)}
-                disabled={loadingProjects}
-                className="field-input h-9 truncate py-0 pl-9"
+                disabled={loadingProjects || projects.length === 0}
+                className="field-input h-10 truncate bg-ink py-0 pl-9 disabled:cursor-not-allowed"
               >
-                {projects.length === 0 && <option value="">未归属项目</option>}
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
+                {projects.length === 0 && <option value="">{projectError ? t("overview.unavailable") : t("overview.unassigned")}</option>}
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
             </label>
             <button
               type="button"
-              onClick={() => void reload(selectedProjectId)}
-              disabled={loading}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line text-ghost transition hover:border-pulse/40 hover:text-pulse disabled:opacity-40"
-              title="刷新概览"
+              onClick={refresh}
+              disabled={busy}
+              className="workspace-icon-button h-10 w-10 shrink-0 border border-line bg-ink"
+              title={t("overview.refresh")}
+              aria-label={t("overview.refresh")}
             >
-              <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
+              <RefreshCw size={15} className={busy ? "animate-spin" : undefined} aria-hidden="true" />
             </button>
-            <Link
-              to="/workflows/new"
-              aria-label="新建工作流"
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-pulse px-3 text-xs font-semibold text-void transition hover:brightness-110"
-            >
-              <Plus size={14} />
-              <span className="hidden sm:inline">新建工作流</span>
+            <Link to="/workflows/new" aria-label={t("overview.newWorkflow")} className="workspace-primary-button shrink-0">
+              <Plus size={15} aria-hidden="true" /><span className="hidden sm:inline">{t("overview.newWorkflow")}</span>
             </Link>
           </div>
         </header>
 
+        <div className="flex h-7 items-center text-[10px] text-ghost" role="status">
+          {busy && <span className="flex items-center gap-1.5"><Loader2 size={11} className="animate-spin" aria-hidden="true" />{t(overview ? "overview.refreshing" : "overview.loading")}</span>}
+        </div>
+
         {errors.length > 0 && (
-          <div className="flex min-h-10 items-center gap-2 border-b border-bad/30 bg-bad/10 px-4 text-xs text-bad sm:px-6">
-            <TriangleAlert size={14} /> {errors.join("；")}
+          <div role="alert" className="mb-5 flex min-w-0 items-start gap-3 rounded-lg border border-bad/25 bg-bad/5 p-4 text-xs text-bad">
+            <TriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <p className="min-w-0 flex-1 break-words leading-relaxed">{errors.join(" · ")}</p>
+            <button type="button" onClick={refresh} disabled={busy} className="shrink-0 rounded-sm font-medium underline underline-offset-4 disabled:opacity-50">{t("overview.retry")}</button>
           </div>
         )}
 
-        <section aria-label="核心指标" className="grid border-b border-line sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: "执行成功率",
-              value:
-                summary?.success_rate === null || summary?.success_rate === undefined
-                  ? "—"
-                  : `${Math.round(summary.success_rate * 100)}%`,
-              detail: `${numberFormat.format(summary?.succeeded ?? 0)} 成功 / ${numberFormat.format(summary?.failed ?? 0)} 失败`,
-              icon: Activity,
-              tone: "text-ok",
-            },
-            {
-              label: "近 7 日执行",
-              value: numberFormat.format(summary?.total ?? 0),
-              detail: `${numberFormat.format(summary?.active ?? 0)} 进行中`,
-              icon: Workflow,
-              tone: "text-pulse",
-            },
-            {
-              label: "估算费用",
-              value: overview ? money(overview.estimated_cost_usd) : "—",
-              detail: overview?.cost_known ? "费率覆盖完整" : "存在未定价调用",
-              icon: CircleDollarSign,
-              tone: "text-volt",
-            },
-            {
-              label: "配额水位",
-              value:
-                quotaError
-                  ? "不可用"
-                  : quotaWaterline === null
-                    ? "未配置"
-                    : `${Math.round(quotaWaterline * 100)}%`,
-              detail: quotaError
-                ? "配额服务请求失败"
-                : quota
-                  ? "当前项目最高占用"
-                  : selectedProjectId
-                    ? "暂无配额数据"
-                    : "未选择项目",
-              icon: Gauge,
-              tone: quotaWaterline !== null && quotaWaterline >= 0.8 ? "text-warn" : "text-ghost",
-            },
-          ].map((metric) => {
+        <section aria-label={t("overview.metrics")} className="overview-metrics workspace-reveal mt-6 grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-ink xl:grid-cols-4">
+          {metrics.map((metric) => {
             const Icon = metric.icon;
             return (
-              <div key={metric.label} className="min-h-32 border-b border-line p-4 sm:p-5 xl:border-b-0 xl:border-r last:border-r-0">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[9px] uppercase text-ghost">{metric.label}</span>
-                  <Icon size={15} className={metric.tone} />
+              <div key={metric.key} data-metric={metric.key} className="overview-metric">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="workspace-stat-label">{metric.label}</span>
+                  <span className={cn("workspace-stat-icon", metric.tone)}>
+                    <Icon size={15} aria-hidden="true" />
+                  </span>
                 </div>
-                <p className={cn("mt-4 truncate font-mono text-2xl", metric.tone)}>{metric.value}</p>
-                <p className="mt-2 text-[11px] text-ghost">{metric.detail}</p>
+                <p className="workspace-stat-value">{metric.value}</p>
+                <p className="workspace-stat-detail">{metric.detail}</p>
               </div>
             );
           })}
         </section>
 
-        {loading && !overview ? (
-          <div className="flex h-72 items-center justify-center gap-2 text-ghost">
-            <Loader2 size={16} className="animate-spin" />
-            <span className="text-xs">加载运营数据…</span>
+        <div className="mt-6 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
+          <div className="overview-panel min-w-0 overflow-hidden">
+            {busy && !overview ? (
+              <div className="p-5 sm:p-6" aria-hidden="true">
+                <div className="overview-skeleton h-3 w-28" /><div className="overview-skeleton mt-4 h-7 w-40" />
+                <div className="mt-8 grid h-40 grid-cols-7 items-end gap-3" aria-hidden="true">
+                  {[35, 60, 45, 80, 55, 95, 70].map((height, index) => <div key={index} className="overview-skeleton" style={{ height: `${height}%` }} />)}
+                </div>
+                <div className="mt-8 space-y-4 border-t border-line pt-6" aria-hidden="true">
+                  <div className="overview-skeleton h-10 w-full" /><div className="overview-skeleton h-10 w-full" />
+                </div>
+              </div>
+            ) : unavailable ? (
+              <div className="workspace-empty min-h-80 p-6">
+                <TriangleAlert size={26} className="text-bad" aria-hidden="true" />
+                <h2 className="text-sm font-semibold text-ice">{t("overview.dataUnavailable")}</h2>
+                <p className="max-w-sm text-xs leading-relaxed text-ghost">{t("overview.retryHint")}</p>
+              </div>
+            ) : overview ? (
+              <>
+                <CostTrendPanel daily={overview.daily} formatMoney={money} />
+                <RecentWorkflowsPanel workflows={overview.recent_workflows} />
+              </>
+            ) : null}
           </div>
-        ) : (
-          <div className="grid min-w-0 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.8fr)]">
-            <div className="min-w-0 border-b border-line xl:border-b-0 xl:border-r">
-              <CostTrendPanel daily={overview?.daily ?? []} formatMoney={money} />
-              <RecentWorkflowsPanel workflows={overview?.recent_workflows ?? []} />
-            </div>
-            <QuotaWaterlinePanel rows={quotas} emptyLabel={quotaEmptyLabel} />
+          <div className="overview-panel min-w-0 overflow-hidden">
+            <QuotaWaterlinePanel rows={quotas} emptyLabel={quotaEmptyLabel} emptyHint={!busy && !unavailableQuota && !selectedProjectId ? t("overview.quotaHint") : undefined} />
+            <WorkspaceShortcuts />
           </div>
-        )}
+        </div>
       </div>
     </main>
   );

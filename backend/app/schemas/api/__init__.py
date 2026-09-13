@@ -30,9 +30,12 @@ from app.schemas.auth import AuthSessionOut as AuthSessionOut
 from app.schemas.auth import UserOut as UserOut
 from app.schemas.cost_governance import CostAlertOut as CostAlertOut
 from app.schemas.cost_governance import CostGovernanceOut as CostGovernanceOut
+from app.schemas.models import DiscoveredModelOut as DiscoveredModelOut
 from app.schemas.models import ModelConfigCreate as ModelConfigCreate
 from app.schemas.models import ModelConfigOut as ModelConfigOut
 from app.schemas.models import ModelConfigUpdate as ModelConfigUpdate
+from app.schemas.models import ModelDiscoveryOut as ModelDiscoveryOut
+from app.schemas.models import ModelDiscoveryRequest as ModelDiscoveryRequest
 from app.schemas.service_accounts import ApiTokenIssue as ApiTokenIssue
 from app.schemas.service_accounts import ApiTokenIssueOut as ApiTokenIssueOut
 from app.schemas.service_accounts import ApiTokenOut as ApiTokenOut
@@ -92,6 +95,45 @@ class WorkflowOut(BaseModel):
     project_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class CopilotDraftRequest(BaseModel):
+    """A natural-language request for a workflow draft (AI Copilot).
+
+    ``base_dsl`` is the current canvas when the user wants the draft to modify
+    an existing workflow rather than start from nothing; ``model_config_id``
+    selects which chat model does the planning.
+    """
+
+    prompt: str = Field(min_length=1, max_length=4_000)
+    project_id: str | None = Field(default=None, min_length=1, max_length=32)
+    base_dsl: dict[str, Any] | None = None
+    model_config_id: str = Field(default="default", min_length=1, max_length=64)
+
+
+class CopilotUsageOut(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
+class CopilotDraftOut(BaseModel):
+    """A drafted workflow plus the validator's verdict on it.
+
+    ``valid`` is the graph verdict, not the schema verdict: a document that
+    matches the DSL schema but fails reachability/cycle checks still returns
+    200 with ``valid=False`` and the errors, so the user can repair it instead
+    of losing the draft.
+    """
+
+    dsl: dict[str, Any]
+    name: str
+    valid: bool
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    attempts: int = 1
+    provider: str
+    model: str
+    usage: CopilotUsageOut = Field(default_factory=CopilotUsageOut)
 
 
 class DebugRunOptions(BaseModel):

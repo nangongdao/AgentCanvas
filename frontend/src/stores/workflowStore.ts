@@ -163,6 +163,8 @@ interface WorkflowState {
   toDSL: () => WorkflowDSL;
   markClean: (version?: number, savedChangeId?: number) => void;
   loadDSL: (dsl: WorkflowDSL, version?: number) => void;
+  /** Apply a copilot draft onto the canvas as an undoable change. */
+  applyCopilotDraft: (dsl: WorkflowDSL) => void;
   newWorkflow: () => void;
 }
 
@@ -174,6 +176,7 @@ function defaultConfig(type: NodeType): Record<string, unknown> {
       return {
         model_config_id: "default",
         agent_mode: "simple",
+        load_balance: "failover",
         system_prompt: "你是一个有帮助的助手。",
         user_prompt: "{{input.user_query}}",
         tools: [],
@@ -329,6 +332,37 @@ function initialEdges(): FlowEdge[] {
     { id: "e_start_agent", source: "start_1", target: "agent_1" },
     { id: "e_agent_end", source: "agent_1", target: "end_1" },
   ];
+}
+
+/**
+ * Build canvas nodes/edges from a DSL document.
+ *
+ * Shared by ``loadDSL`` (open a stored workflow) and ``applyCopilotDraft``
+ * (apply an AI draft) so the two can never drift on how a document maps onto
+ * the canvas.
+ */
+function dslToGraph(dsl: WorkflowDSL): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const nodes: FlowNode[] = dsl.nodes.map((node) =>
+    withAriaLabel({
+      id: node.id,
+      type: canvasNodeType(node.type),
+      position: node.position,
+      data: {
+        label: node.name ?? NODE_META[node.type]?.label ?? node.type,
+        nodeType: node.type,
+        config: node.config ?? {},
+      },
+    }),
+  );
+  const edges: FlowEdge[] = dsl.edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.source_handle ?? undefined,
+    targetHandle: edge.target_handle ?? undefined,
+    label: edge.label ?? undefined,
+  }));
+  return { nodes, edges };
 }
 
 export const useWorkflowStore = create<WorkflowState>()(
@@ -791,26 +825,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     })),
 
   loadDSL: (dsl, version = 1) => {
-    const nodes: FlowNode[] = dsl.nodes.map((node) =>
-      withAriaLabel({
-        id: node.id,
-        type: canvasNodeType(node.type),
-        position: node.position,
-        data: {
-          label: node.name ?? NODE_META[node.type]?.label ?? node.type,
-          nodeType: node.type,
-          config: node.config ?? {},
-        },
-      }),
-    );
-    const edges: FlowEdge[] = dsl.edges.map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      sourceHandle: edge.source_handle ?? undefined,
-      targetHandle: edge.target_handle ?? undefined,
-      label: edge.label ?? undefined,
-    }));
+    const { nodes, edges } = dslToGraph(dsl);
     replaceWorkflowHistoryBaseline(() => {
       set({
         name: dsl.name,
@@ -828,6 +843,24 @@ export const useWorkflowStore = create<WorkflowState>()(
       });
     });
   },
+
+  applyCopilotDraft: (dsl) =>
+    set((state) => {
+      const { nodes, edges } = dslToGraph(dsl);
+      return {
+        name: dsl.name || state.name,
+        variables: dsl.variables,
+        settings: dsl.settings,
+        nodes,
+        edges,
+        canvas: dsl.canvas ?? { ...DEFAULT_CANVAS },
+        dirty: true,
+        changeId: state.changeId + 1,
+        selectedNodeId: null,
+        selectedNodeIds: [],
+        selectedEdgeId: null,
+      };
+    }),
 
   newWorkflow: () =>
     replaceWorkflowHistoryBaseline(() => {

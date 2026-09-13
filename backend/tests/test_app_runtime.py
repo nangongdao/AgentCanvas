@@ -369,6 +369,10 @@ def test_embed_script_served_when_embedding_enabled(tmp_path) -> None:
         assert script.headers.get("referrer-policy") == "no-referrer"
         assert script.headers.get("x-content-type-options") == "nosniff"
         assert script.headers.get("cache-control") == "no-store"
+        # The bootstrap is loaded by external host pages; CORP must be
+        # cross-origin or the C8-3 middleware's same-origin default makes
+        # browsers block the request with ERR_BLOCKED_BY_RESPONSE.
+        assert script.headers.get("cross-origin-resource-policy") == "cross-origin"
         body = script.text
         # The static bootstrap resolves slug/origin from its own src URL and
         # reads embedder-supplied data attributes; it must not interpolate any

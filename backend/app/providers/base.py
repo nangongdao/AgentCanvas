@@ -9,6 +9,13 @@ from typing import Any, ClassVar, Literal
 
 from app.core.provider_capabilities import CapabilityName, ProviderCapabilities
 
+# Stable sentinel embedded in the workflow-copilot system prompt. Real providers
+# treat it as ordinary text; the demo MockChatProvider looks for it so the
+# copilot can be exercised end-to-end without an API key. Keep the two in sync —
+# it lives here (a leaf module both sides already import) to avoid a
+# providers -> services import cycle.
+COPILOT_PROMPT_MARKER = "AGENTCANVAS_COPILOT_V1"
+
 
 @dataclass(frozen=True)
 class ToolCall:

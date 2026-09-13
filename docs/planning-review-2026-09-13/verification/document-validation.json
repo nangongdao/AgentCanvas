@@ -1,0 +1,17 @@
+{
+  "document": "docs/future-roadmap-review-2026-09-13.md",
+  "sha256": "f3676719a7fadf5abaec767984a64083c48da7f86c7fbee7ada56f7775d98ac9",
+  "lines": 296,
+  "characters": 14668,
+  "path_references_checked": 45,
+  "unique_paths_checked": 40,
+  "markdown_links_checked": 6,
+  "coverage": {
+    "review_findings": 12,
+    "execution_packages": 8,
+    "source_entries": 14,
+    "targeted_tests_passed": 68
+  },
+  "errors": [],
+  "scope": "Planning completeness/structure, source paths and stated evidence only; planned features and untested production behavior are not certified."
+}

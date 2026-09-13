@@ -31,6 +31,7 @@ class Settings:
         object.__setattr__(self, "docker_secret_dir", Path(self.docker_secret_dir))
 
     # Server
+    app_profile: str = "standard"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     process_role: str = "all"
@@ -80,6 +81,9 @@ class Settings:
     rate_limit_ingest_requests: int = 10
     rate_limit_retrieval_requests: int = 30
     rate_limit_mcp_requests: int = 30
+    # Provider endpoint discovery performs an operator-triggered outbound request,
+    # so it gets its own bucket rather than sharing an unrelated budget.
+    rate_limit_discovery_requests: int = 30
     rate_limit_max_buckets: int = 10_000
     # C8-2: public app runtime is an unauthenticated surface; keep per-client
     # send volume bounded independently of platform chat.
@@ -111,6 +115,8 @@ class Settings:
     login_timeout_seconds: float = 10.0
     mcp_max_concurrent: int = 4
     mcp_timeout_seconds: float = 30.0
+    discovery_max_concurrent: int = 4
+    discovery_timeout_seconds: float = 15.0
 
     # D4 Phase 2 outbound resilience. Redis-backed horizontal roles share these
     # policies; SQLite and unit-test deployments keep process-local state.
@@ -318,6 +324,13 @@ def _env(key: str, default: str = "") -> str:
     return value.strip() if value else default
 
 
+# C9 desktop profile: the WebView2 page origin for custom schemes. REST rides
+# the protocol proxy (same-origin, no CORS), but the three SSE consumers
+# connect directly to the sidecar port, so the webview origin must be in the
+# allow-list. macOS/Linux use the tauri scheme; Windows uses http://tauri.localhost.
+_TAURI_CORS_ORIGINS: tuple[str, ...] = ("tauri://localhost", "http://tauri.localhost")
+
+
 def _csv(key: str, default: str = "") -> tuple[str, ...]:
     return tuple(value.strip() for value in _env(key, default).split(",") if value.strip())
 
@@ -338,6 +351,17 @@ def validate_runtime_settings(settings: Settings) -> None:
         raise RuntimeError("DATABASE_URL must use sqlite+aiosqlite or postgresql+asyncpg") from exc
     if database_driver not in {"sqlite+aiosqlite", "postgresql+asyncpg"}:
         raise RuntimeError("DATABASE_URL must use sqlite+aiosqlite or postgresql+asyncpg")
+    if settings.app_profile == "desktop":
+        # C9 §5.1: the desktop profile freezes the single-machine degradation
+        # set so the Rust side only passes a port and a data directory.
+        if database_driver != "sqlite+aiosqlite":
+            raise RuntimeError("desktop profile requires sqlite+aiosqlite (single machine)")
+        if settings.process_role != "all":
+            raise RuntimeError("desktop profile requires APP_PROCESS_ROLE=all")
+        if settings.redis_url:
+            raise RuntimeError("desktop profile must not set REDIS_URL")
+        if settings.app_host not in {"127.0.0.1", "localhost"}:
+            raise RuntimeError("desktop profile binds 127.0.0.1 only")
     if settings.process_role != "all":
         if database_driver != "postgresql+asyncpg":
             raise RuntimeError("horizontal process roles require postgresql+asyncpg")
@@ -416,6 +440,7 @@ def validate_runtime_settings(settings: Settings) -> None:
         "RATE_LIMIT_INGEST_REQUESTS": settings.rate_limit_ingest_requests,
         "RATE_LIMIT_RETRIEVAL_REQUESTS": settings.rate_limit_retrieval_requests,
         "RATE_LIMIT_MCP_REQUESTS": settings.rate_limit_mcp_requests,
+        "RATE_LIMIT_DISCOVERY_REQUESTS": settings.rate_limit_discovery_requests,
         "RATE_LIMIT_MAX_BUCKETS": settings.rate_limit_max_buckets,
     }
     for name, value in rate_limits.items():
@@ -444,6 +469,8 @@ def validate_runtime_settings(settings: Settings) -> None:
         "LOGIN_TIMEOUT_SECONDS": settings.login_timeout_seconds,
         "MCP_MAX_CONCURRENT": settings.mcp_max_concurrent,
         "MCP_TIMEOUT_SECONDS": settings.mcp_timeout_seconds,
+        "DISCOVERY_MAX_CONCURRENT": settings.discovery_max_concurrent,
+        "DISCOVERY_TIMEOUT_SECONDS": settings.discovery_timeout_seconds,
     }
     for name, limit_value in operation_limits.items():
         if limit_value <= 0:
@@ -587,10 +614,18 @@ def load_settings() -> Settings:
         else Settings.cors_origins
     )
 
+    profile = _env("APP_PROFILE", "standard").strip().lower()
+    if profile not in {"standard", "desktop"}:
+        raise RuntimeError("APP_PROFILE must be standard or desktop")
+    desktop = profile == "desktop"
+    if desktop:
+        cors = cors + tuple(origin for origin in _TAURI_CORS_ORIGINS if origin not in cors)
+
     return Settings(
-        app_host=_env("APP_HOST", "0.0.0.0"),
+        app_profile=profile,
+        app_host="127.0.0.1" if desktop else _env("APP_HOST", "0.0.0.0"),
         app_port=int(_env("APP_PORT", "8000")),
-        process_role=_env("APP_PROCESS_ROLE", "all").lower(),
+        process_role="all" if desktop else _env("APP_PROCESS_ROLE", "all").lower(),
         instance_id=_env("APP_INSTANCE_ID") or socket.gethostname(),
         log_level=_env("LOG_LEVEL", "INFO").upper(),
         log_format=_env("LOG_FORMAT", "json").lower(),
@@ -630,6 +665,7 @@ def load_settings() -> Settings:
         rate_limit_ingest_requests=int(_env("RATE_LIMIT_INGEST_REQUESTS", "10")),
         rate_limit_retrieval_requests=int(_env("RATE_LIMIT_RETRIEVAL_REQUESTS", "30")),
         rate_limit_mcp_requests=int(_env("RATE_LIMIT_MCP_REQUESTS", "30")),
+        rate_limit_discovery_requests=int(_env("RATE_LIMIT_DISCOVERY_REQUESTS", "30")),
         rate_limit_max_buckets=int(_env("RATE_LIMIT_MAX_BUCKETS", "10000")),
         request_body_max_bytes=int(_env("REQUEST_BODY_MAX_BYTES", str(1 * 1024 * 1024))),
         upload_request_max_bytes=int(_env("UPLOAD_REQUEST_MAX_BYTES", str(21 * 1024 * 1024))),
@@ -656,6 +692,8 @@ def load_settings() -> Settings:
         login_timeout_seconds=float(_env("LOGIN_TIMEOUT_SECONDS", "10")),
         mcp_max_concurrent=int(_env("MCP_MAX_CONCURRENT", "4")),
         mcp_timeout_seconds=float(_env("MCP_TIMEOUT_SECONDS", "30")),
+        discovery_max_concurrent=int(_env("DISCOVERY_MAX_CONCURRENT", "4")),
+        discovery_timeout_seconds=float(_env("DISCOVERY_TIMEOUT_SECONDS", "15")),
         model_resilience_max_attempts=int(_env("MODEL_RESILIENCE_MAX_ATTEMPTS", "2")),
         model_resilience_failure_threshold=int(_env("MODEL_RESILIENCE_FAILURE_THRESHOLD", "3")),
         model_resilience_reset_seconds=float(_env("MODEL_RESILIENCE_RESET_SECONDS", "30")),
@@ -676,9 +714,9 @@ def load_settings() -> Settings:
         local_embedding_dimensions=int(_env("LOCAL_EMBEDDING_DIMENSIONS", "384")),
         chroma_max_concurrent=int(_env("CHROMA_MAX_CONCURRENT", "4")),
         vector_max_concurrent=int(_env("VECTOR_MAX_CONCURRENT", "4")),
-        vector_backend=_env("VECTOR_BACKEND", "auto").lower() or "auto",
+        vector_backend=("sql" if desktop else _env("VECTOR_BACKEND", "auto").lower() or "auto"),
         database_url=_env("DATABASE_URL"),
-        redis_url=_env("REDIS_URL"),
+        redis_url="" if desktop else _env("REDIS_URL"),
         data_dir=Path(_env("APP_DATA_DIR", str(DATA_DIR))).expanduser(),
         redis_aof_dir=(Path(_env("REDIS_AOF_DIR")).expanduser() if _env("REDIS_AOF_DIR") else None),
         startup_migrations=_env("STARTUP_MIGRATIONS", "true").lower()
@@ -751,9 +789,7 @@ def load_settings() -> Settings:
         execution_event_retention_batch_size=int(
             _env("EXECUTION_EVENT_RETENTION_BATCH_SIZE", "1000")
         ),
-        execution_event_retention_grace_days=int(
-            _env("EXECUTION_EVENT_RETENTION_GRACE_DAYS", "7")
-        ),
+        execution_event_retention_grace_days=int(_env("EXECUTION_EVENT_RETENTION_GRACE_DAYS", "7")),
         smtp_host=_env("SMTP_HOST", ""),
         smtp_port=int(_env("SMTP_PORT", "587")),
         smtp_username=_env("SMTP_USERNAME", ""),

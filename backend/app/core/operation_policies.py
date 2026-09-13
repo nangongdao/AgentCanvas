@@ -92,6 +92,19 @@ def operation_policies(settings: Settings) -> tuple[OperationPolicy, ...]:
         # bucket so session-churn or send spam cannot drain the shared default.
         # The per-client bucket is decoupled from the per-session send budget
         # (C3-5) so the two limits cannot starve each other.
+        # The copilot is an editor-triggered LLM call, so it shares the
+        # interactive chat budget rather than the execution budget: a burst of
+        # drafting must not be able to starve interactive chat, or vice versa.
+        OperationPolicy(
+            "workflow_copilot",
+            r"^/api/workflows/copilot/draft$",
+            frozenset({"POST"}),
+            RequestPolicyConfig(
+                max_body_bytes=body,
+                max_concurrent=settings.chat_max_concurrent,
+            ),
+            RateLimitConfig(settings.rate_limit_chat_requests, window),
+        ),
         OperationPolicy(
             "app_runtime_session",
             r"^/api/apps/p/[^/]+/sessions$",
@@ -168,6 +181,17 @@ def operation_policies(settings: Settings) -> tuple[OperationPolicy, ...]:
                 timeout_seconds=settings.mcp_timeout_seconds,
             ),
             RateLimitConfig(settings.rate_limit_mcp_requests, window),
+        ),
+        OperationPolicy(
+            "model_discovery",
+            r"^/api/models/discover$",
+            frozenset({"POST"}),
+            RequestPolicyConfig(
+                max_body_bytes=body,
+                max_concurrent=settings.discovery_max_concurrent,
+                timeout_seconds=settings.discovery_timeout_seconds,
+            ),
+            RateLimitConfig(settings.rate_limit_discovery_requests, window),
         ),
     )
 

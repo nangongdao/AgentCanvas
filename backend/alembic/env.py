@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import MutableMapping
 from logging.config import fileConfig
+from typing import Literal
 
-from sqlalchemy import pool, text
+from alembic.autogenerate import comparators
+from alembic.autogenerate.api import AutogenContext
+from alembic.util.langhelpers import DispatchPriority, PriorityDispatchResult
+from sqlalchemy import Column, pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
@@ -25,8 +30,42 @@ LANGGRAPH_CHECKPOINT_TABLES = frozenset(
 )
 
 
-def _include_name(name: str | None, type_: str, _parent_names: dict[str, str | None]) -> bool:
+def _include_name(
+    name: str | None,
+    type_: Literal["schema", "table", "column", "index", "unique_constraint", "foreign_key_constraint"],
+    _parent_names: MutableMapping[
+        Literal["schema_name", "table_name", "schema_qualified_table_name"], str | None
+    ],
+) -> bool:
     return type_ != "table" or name not in LANGGRAPH_CHECKPOINT_TABLES
+
+
+@comparators.dispatch_for("column", subgroup="nullable", priority=DispatchPriority.FIRST)
+def _ignore_pk_nullability(
+    _context: AutogenContext,
+    _alter_column_op,
+    _schema: str | None,
+    _tname: str,
+    _cname: str,
+    conn_col: Column,
+    metadata_col: Column,
+) -> PriorityDispatchResult:
+    """Skip nullability diffs on primary-key columns under PostgreSQL.
+
+    PK columns are always NOT NULL in Postgres, so autogenerate reflects them
+    as non-nullable even when the model (and migration) declares nullable=True
+    (the "no app" / "no model" usage-fact buckets). SQLite keeps them truly
+    nullable; stopping this comparator on PostgreSQL keeps both backends in
+    sync without a fake migration.
+
+    Registered against the ``nullable`` subgroup at FIRST priority so it runs
+    before alembic's built-in ``_compare_nullable`` and can STOP it.
+    """
+    if not _context.dialect.name.startswith("postgres"):
+        return PriorityDispatchResult.CONTINUE
+    if metadata_col.primary_key:
+        return PriorityDispatchResult.STOP
+    return PriorityDispatchResult.CONTINUE
 
 
 def run_migrations_offline() -> None:

@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -47,6 +48,12 @@ jobs:
       - name: Public contract drift and compatibility
         working-directory: backend
         run: python -m uv run python -m scripts.contracts check
+
+      - name: Migration head parity
+        working-directory: backend
+        # CURRENT_REVISION gates /readyz, the scheduler, and the event relay;
+        # a stale value after adding a migration silently breaks all three.
+        run: python -m uv run python -m scripts.check_migration_head
 
       - name: Backend performance smoke
         working-directory: backend
@@ -113,6 +120,118 @@ jobs:
             frontend/playwright-report
             frontend/test-results
           if-no-files-found: ignore
+
+  desktop-shell:
+    # C9 §9.1: PRs run only the Rust checks for the desktop shell; the full
+    # installer builds stay on tag/manual triggers. Windows (not Linux)
+    # because the shell pins the MSVC toolchain via rust-toolchain.toml and
+    # the WebView2 glue is Windows-specific; the runner's preinstalled VS
+    # makes MSVC work with no extra setup.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.6.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      - name: Build frontend dist embedded by the shell
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Cargo check
+        working-directory: frontend/src-tauri
+        run: cargo check --workspace --all-targets
+
+      - name: Cargo clippy
+        working-directory: frontend/src-tauri
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Cargo test
+        working-directory: frontend/src-tauri
+        run: cargo test --workspace
+
+  desktop-build-windows:
+    # C9 §9.1/§9.2: full installer builds run on tags and manual dispatch only
+    # (PRs are covered by the desktop-shell job). The NSIS installer embeds
+    # the frontend dist, the PyInstaller backend onedir, and the shell binary;
+    # the size gate (target < 300 MiB, cap < 450 MiB) fails the build before
+    # an artifact can silently bloat.
+    runs-on: windows-latest
+    timeout-minutes: 90
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.32
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.6.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      - name: Build frontend dist
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Build backend sidecar (PyInstaller onedir)
+        working-directory: backend
+        run: >
+          python -m uv run --python 3.13 --with pyinstaller pyinstaller
+          desktop/agentcanvas-backend.spec
+          --distpath ../frontend/src-tauri/resources
+          --workpath desktop/build
+          --noconfirm
+
+      - name: Build NSIS installer (Tauri)
+        working-directory: frontend
+        run: pnpm dlx @tauri-apps/cli build --config src-tauri/tauri.installer.conf.json
+
+      - name: Installer size gate
+        working-directory: frontend
+        run: node src-tauri/scripts/check-installer-size.mjs src-tauri/target/release/bundle/nsis
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentcanvas-installer-${{ github.sha }}
+          path: frontend/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
 
   postgresql-integration:
     runs-on: ubuntu-latest

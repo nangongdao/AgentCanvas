@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
   CheckCircle2,
   Coins,
+  Download,
+  FileClock,
   Gauge,
   Hash,
   Layers,
@@ -12,6 +14,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { ApiError } from "@/api/client";
 import {
   type CostAlertDTO,
   type CostGovernanceDTO,
@@ -19,15 +22,40 @@ import {
   getCostGovernance,
   listCostAlerts,
 } from "@/api/endpoints/costAlerts";
+import {
+  type UsageReconciliation,
+  downloadUsageExport,
+  getUsageReconciliation,
+} from "@/api/endpoints/usage";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useI18nStore, useT, type Translate } from "@/features/i18n/i18n";
 import { cn } from "@/utils/cn";
 
-const KIND_LABEL: Record<string, string> = {
-  calls: "调用次数",
-  tokens: "Token",
-  cost: "费用",
-  concurrency: "并发",
-};
+/** Mirrors `MAX_USAGE_FACT_WINDOW_DAYS` in `backend/app/schemas/usage.py`;
+ * the server rejects wider windows with a 422, so the form refuses first. */
+const USAGE_WINDOW_DAYS = 366;
+
+const ALERT_KINDS = ["calls", "tokens", "cost", "concurrency"] as const;
+const ALERT_SEVERITIES = ["critical", "warning"] as const;
+const ALERT_STATUSES = ["open", "acknowledged"] as const;
+
+function kindLabel(kind: string, t: Translate): string {
+  return (ALERT_KINDS as readonly string[]).includes(kind)
+    ? t(`cost.kind.${kind}` as Parameters<Translate>[0])
+    : kind;
+}
+
+function severityLabel(severity: string, t: Translate): string {
+  return (ALERT_SEVERITIES as readonly string[]).includes(severity)
+    ? t(`cost.severity.${severity}` as Parameters<Translate>[0])
+    : severity;
+}
+
+function statusLabel(status: string, t: Translate): string {
+  return (ALERT_STATUSES as readonly string[]).includes(status)
+    ? t(`cost.status.${status}` as Parameters<Translate>[0])
+    : status;
+}
 
 const SEVERITY_STYLE: Record<string, string> = {
   critical: "border-bad/40 bg-bad/10 text-bad",
@@ -38,6 +66,20 @@ const STATUS_STYLE: Record<string, string> = {
   open: "border-pulse/40 bg-pulse/10 text-pulse",
   acknowledged: "border-ok/40 bg-ok/10 text-ok",
 };
+
+/** UTC day string shifted by `offsetDays` (negative = past). */
+function isoDay(offsetDays: number): string {
+  const day = new Date();
+  day.setUTCDate(day.getUTCDate() + offsetDays);
+  return day.toISOString().slice(0, 10);
+}
+
+function daysBetween(fromDay: string, toDay: string): number {
+  const from = Date.parse(`${fromDay}T00:00:00Z`);
+  const to = Date.parse(`${toDay}T00:00:00Z`);
+  if (Number.isNaN(from) || Number.isNaN(to)) return Number.NaN;
+  return Math.round((to - from) / 86_400_000);
+}
 
 function CeilingCard({
   icon,
@@ -105,6 +147,7 @@ function AlertRow({
   canEdit: boolean;
   onAck: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <div className="glass flex flex-col gap-2 rounded-lg border border-line px-4 py-3 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
@@ -116,7 +159,7 @@ function AlertRow({
               SEVERITY_STYLE[alert.severity] ?? "border-line text-ghost",
             )}
           >
-            {alert.severity}
+            {severityLabel(alert.severity, t)}
           </span>
           <span
             className={cn(
@@ -124,14 +167,14 @@ function AlertRow({
               STATUS_STYLE[alert.status] ?? "border-line text-ghost",
             )}
           >
-            {alert.status}
+            {statusLabel(alert.status, t)}
           </span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] text-ghost/70">
-          <span className="text-volt">{KIND_LABEL[alert.kind] ?? alert.kind}</span>
+          <span className="text-volt">{kindLabel(alert.kind, t)}</span>
           <span className="text-ghost/30">/</span>
           <span>
-            {alert.limit_value} 上限 / 实际 {alert.actual_value}
+            {t("cost.alertLimit", { limit: alert.limit_value, actual: alert.actual_value })}
           </span>
           <span className="text-ghost/30">/</span>
           <span className="truncate">{alert.id.slice(0, 12)}</span>
@@ -147,19 +190,243 @@ function AlertRow({
           type="button"
           onClick={() => onAck(alert.id)}
           className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-ok/40 bg-ok/10 px-2.5 text-xs text-ok transition hover:brightness-110 active:scale-95"
-          title="标记为已确认"
+          title={t("cost.ackTitle")}
         >
           <BadgeCheck size={13} />
-          确认
+          {t("cost.ack")}
         </button>
       )}
     </div>
   );
 }
 
+/** C7-1 surface: download raw metering facts and read the deterministic
+ * month digest a billing system reconciles against. Platform-wide by
+ * default — a scoped export is available from the project surfaces, so this
+ * panel is admin-gated to avoid offering a button that can only 403. */
+function UsageExportPanel({ onToast }: { onToast: (message: string) => void }) {
+  const t = useT();
+  const locale = useI18nStore((state) => state.locale);
+  const numberFormat = useMemo(
+    () => new Intl.NumberFormat(locale === "zh" ? "zh-CN" : "en-US"),
+    [locale],
+  );
+  const dateFormat = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        timeZone: "UTC",
+      }),
+    [locale],
+  );
+
+  const [fromDay, setFromDay] = useState(() => isoDay(-29));
+  const [toDay, setToDay] = useState(() => isoDay(0));
+  const [format, setFormat] = useState<"csv" | "json">("csv");
+  const [month, setMonth] = useState(() => isoDay(0).slice(0, 7));
+  const [exporting, setExporting] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+  const [reconciliation, setReconciliation] = useState<UsageReconciliation | null>(null);
+
+  const failure = (cause: unknown, fallback: string) =>
+    cause instanceof ApiError || cause instanceof Error ? cause.message : fallback;
+
+  const exportFacts = async () => {
+    setExportError(null);
+    const span = daysBetween(fromDay, toDay);
+    if (Number.isNaN(span) || span < 0) {
+      setExportError(t("cost.usage.rangeInvalid"));
+      return;
+    }
+    if (span + 1 > USAGE_WINDOW_DAYS) {
+      setExportError(t("cost.usage.windowHint", { days: USAGE_WINDOW_DAYS }));
+      return;
+    }
+    setExporting(true);
+    try {
+      const filename = await downloadUsageExport({ from_day: fromDay, to_day: toDay, format });
+      onToast(t("cost.usage.exported", { filename }));
+    } catch (cause) {
+      setExportError(failure(cause, t("cost.usage.exportFailed")));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const readReconciliation = async () => {
+    setReconcileError(null);
+    setReconciling(true);
+    try {
+      setReconciliation(await getUsageReconciliation({ month }));
+    } catch (cause) {
+      setReconciliation(null);
+      setReconcileError(failure(cause, t("cost.usage.reconcileFailed")));
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const totals = reconciliation?.totals;
+
+  return (
+    <section className="glass rounded-lg border border-line p-4">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h2 className="text-sm font-semibold text-ice">{t("cost.usage.title")}</h2>
+        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-ghost/50">
+          {t("cost.usage.caption")}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,7rem)_auto] sm:items-end">
+        <label className="min-w-0">
+          <span className="mb-1 block font-mono text-[9px] uppercase text-ghost/60">
+            {t("cost.usage.from")}
+          </span>
+          <input
+            type="date"
+            value={fromDay}
+            max={toDay}
+            onChange={(event) => setFromDay(event.target.value)}
+            className="field-input h-9 py-0 font-mono text-xs"
+          />
+        </label>
+        <label className="min-w-0">
+          <span className="mb-1 block font-mono text-[9px] uppercase text-ghost/60">
+            {t("cost.usage.to")}
+          </span>
+          <input
+            type="date"
+            value={toDay}
+            min={fromDay}
+            onChange={(event) => setToDay(event.target.value)}
+            className="field-input h-9 py-0 font-mono text-xs"
+          />
+        </label>
+        <label className="min-w-0">
+          <span className="mb-1 block font-mono text-[9px] uppercase text-ghost/60">
+            {t("cost.usage.format")}
+          </span>
+          <select
+            aria-label={t("cost.usage.format")}
+            value={format}
+            onChange={(event) => setFormat(event.target.value as "csv" | "json")}
+            className="field-input h-9 py-0"
+          >
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => void exportFacts()}
+          disabled={exporting}
+          className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-line bg-ink px-3 text-xs text-ice transition hover:border-pulse/40 hover:text-pulse disabled:opacity-40"
+        >
+          {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          {exporting ? t("cost.usage.exporting") : t("cost.usage.export")}
+        </button>
+      </div>
+
+      <p className="mt-1.5 font-mono text-[9px] text-ghost/45">
+        {t("cost.usage.windowHint", { days: USAGE_WINDOW_DAYS })}
+      </p>
+      {exportError && (
+        <p role="alert" className="mt-1 font-mono text-[10px] text-bad">
+          {exportError}
+        </p>
+      )}
+
+      <div className="mt-4 border-t border-line/70 pt-3">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <label className="min-w-0">
+            <span className="mb-1 block font-mono text-[9px] uppercase text-ghost/60">
+              {t("cost.usage.month")}
+            </span>
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+              className="field-input h-9 py-0 font-mono text-xs"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void readReconciliation()}
+            disabled={reconciling || month.length !== 7}
+            className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-line bg-ink px-3 text-xs text-ice transition hover:border-pulse/40 hover:text-pulse disabled:opacity-40"
+          >
+            {reconciling ? <Loader2 size={13} className="animate-spin" /> : <FileClock size={13} />}
+            {reconciling ? t("cost.usage.reconciling") : t("cost.usage.reconcile")}
+          </button>
+        </div>
+        {reconcileError && (
+          <p role="alert" className="mt-1 font-mono text-[10px] text-bad">
+            {reconcileError}
+          </p>
+        )}
+        {reconciliation && totals && (
+          <div className="mt-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[9px] uppercase text-ghost/50">
+                {t("cost.usage.digest")}
+              </span>
+              <span
+                className="truncate rounded-xs border border-volt/30 bg-volt/10 px-1.5 py-0.5 font-mono text-[10px] text-volt"
+                title={reconciliation.digest}
+                data-testid="usage-digest"
+              >
+                {reconciliation.digest.slice(0, 24)}…
+              </span>
+              <span className="rounded-xs border border-line bg-ink/60 px-1.5 py-0.5 font-mono text-[9px] text-ghost">
+                {reconciliation.scope.organization_id ??
+                  reconciliation.scope.project_id ??
+                  t("cost.usage.scopeAll")}
+              </span>
+            </div>
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { key: "days", label: t("cost.usage.days"), value: numberFormat.format(reconciliation.days.length) },
+                { key: "executions", label: t("cost.usage.executions"), value: numberFormat.format(totals.executions) },
+                { key: "tokens", label: t("cost.usage.tokens"), value: numberFormat.format(totals.total_tokens) },
+                {
+                  key: "cost",
+                  label: t("cost.usage.cost"),
+                  value: totals.estimated_cost_usd ?? "—",
+                },
+              ].map((entry) => (
+                <div key={entry.key} className="rounded-md border border-line bg-ink/40 px-2.5 py-2">
+                  <dt className="font-mono text-[9px] uppercase text-ghost/50">{entry.label}</dt>
+                  <dd className="mt-0.5 truncate font-display text-sm font-semibold text-ice" title={entry.value}>
+                    {entry.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="font-mono text-[9px] text-ghost/50">
+              {dateFormat.format(new Date(`${reconciliation.month}-01T00:00:00Z`))}
+              {totals.estimated_cost_usd === null || totals.estimated_cost_usd === undefined
+                ? ` · ${t("cost.usage.costUnknown")}`
+                : ""}
+              {totals.cost_unknown_executions > 0
+                ? ` · ${t("cost.usage.unpriced")}: ${numberFormat.format(totals.cost_unknown_executions)}`
+                : ""}
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function CostGovernancePage() {
+  const t = useT();
   const { can } = useAuth();
   const canEdit = can("editor");
+  const canAdmin = can("admin");
   const [governance, setGovernance] = useState<CostGovernanceDTO | null>(null);
   const [alerts, setAlerts] = useState<CostAlertDTO[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -167,7 +434,6 @@ export function CostGovernancePage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
-  const cursorRef = useRef<string | null>(null);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -185,13 +451,12 @@ export function CostGovernancePage() {
       setGovernance(gov);
       setAlerts(page.items);
       setNextCursor(page.next_cursor);
-      cursorRef.current = null;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载成本治理数据失败");
+      setError(err instanceof Error ? err.message : t("cost.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -210,9 +475,8 @@ export function CostGovernancePage() {
       });
       setAlerts((current) => [...current, ...page.items]);
       setNextCursor(page.next_cursor);
-      cursorRef.current = cursor;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载更多失败");
+      setError(err instanceof Error ? err.message : t("cost.loadMoreFailed"));
     }
   };
 
@@ -226,9 +490,9 @@ export function CostGovernancePage() {
       setGovernance((gov) =>
         gov ? { ...gov, summary: { ...gov.summary, open: Math.max(0, gov.summary.open - 1) } } : gov,
       );
-      showToast("已确认告警");
+      showToast(t("cost.acked"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "确认失败");
+      setError(err instanceof Error ? err.message : t("cost.ackFailed"));
     } finally {
       setActingId(null);
     }
@@ -238,44 +502,44 @@ export function CostGovernancePage() {
     ? [
         {
           icon: <Hash size={13} />,
-          label: "token / 执行",
-          value: governance.max_tokens_per_execution > 0 ? String(governance.max_tokens_per_execution) : "未设置",
-          hint: "0 表示不限量",
+          label: t("cost.ceiling.tokens.label"),
+          value: governance.max_tokens_per_execution > 0 ? String(governance.max_tokens_per_execution) : t("cost.notSet"),
+          hint: t("cost.ceiling.tokens.hint"),
         },
         {
           icon: <Coins size={13} />,
-          label: "费用上限 / 执行",
-          value: governance.max_cost_usd_per_execution ?? "未设置",
+          label: t("cost.ceiling.cost.label"),
+          value: governance.max_cost_usd_per_execution ?? t("cost.notSet"),
           unit: "USD",
-          hint: "达到后立即终止执行",
+          hint: t("cost.ceiling.cost.hint"),
         },
         {
           icon: <Gauge size={13} />,
-          label: "并发 / 执行",
-          value: governance.max_concurrent_per_execution > 0 ? String(governance.max_concurrent_per_execution) : "未设置",
-          hint: "单次执行内同时的模型调用数",
+          label: t("cost.ceiling.concurrency.label"),
+          value: governance.max_concurrent_per_execution > 0 ? String(governance.max_concurrent_per_execution) : t("cost.notSet"),
+          hint: t("cost.ceiling.concurrency.hint"),
         },
         {
           icon: <Layers size={13} />,
-          label: "调用次数 / 执行",
+          label: t("cost.ceiling.calls.label"),
           value: String(governance.max_calls_per_execution),
-          hint: "模型调用预算",
+          hint: t("cost.ceiling.calls.hint"),
         },
       ]
     : [];
 
   return (
-    <div className="ambient-stage flex h-full w-full flex-col bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full flex-col text-ice">
       <header role="presentation" className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5">
         <span className="flex h-8 w-8 items-center justify-center text-volt">
           <ShieldCheck size={18} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
-            AgentCanvas Cost Governance
+          <h1 className="workspace-page-title">
+            {t("cost.title")}
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">
-            budgets / ceilings / alerts
+            {t("cost.eyebrow")}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
@@ -284,7 +548,7 @@ export function CostGovernancePage() {
             onClick={() => void reload()}
             disabled={loading}
             className="flex h-8 w-8 items-center justify-center rounded-md text-ghost transition hover:bg-line hover:text-pulse disabled:opacity-40"
-            title="刷新"
+            title={t("cost.refresh")}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
           </button>
@@ -300,7 +564,7 @@ export function CostGovernancePage() {
             onClick={() => setError(null)}
             className="h-7 rounded-md px-2 font-mono text-[9px] uppercase hover:bg-bad/10"
           >
-            dismiss
+            {t("cost.dismiss")}
           </button>
         </div>
       )}
@@ -316,13 +580,13 @@ export function CostGovernancePage() {
           {loading && !governance ? (
             <div className="flex items-center gap-2 text-ghost/60">
               <Loader2 size={14} className="animate-spin" />
-              <span className="text-xs">加载中…</span>
+              <span className="text-xs">{t("cost.loading")}</span>
             </div>
           ) : (
             <>
               <section>
                 <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-ghost/60">
-                  Per-Execution Ceilings
+                  {t("cost.ceilingsTitle")}
                 </h2>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {ceilings.map((ceiling) => (
@@ -334,15 +598,15 @@ export function CostGovernancePage() {
               {governance && (
                 <section>
                   <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-ghost/60">
-                    Alert Summary
+                    {t("cost.alertSummary")}
                   </h2>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    <MetricChip label="total" value={governance.summary.total} tone="ice" />
-                    <MetricChip label="open" value={governance.summary.open} tone="pulse" />
-                    <MetricChip label="critical" value={governance.summary.critical} tone="bad" />
-                    <MetricChip label="warning" value={governance.summary.warning} tone="warn" />
+                    <MetricChip label={t("cost.summary.total")} value={governance.summary.total} tone="ice" />
+                    <MetricChip label={t("cost.status.open")} value={governance.summary.open} tone="pulse" />
+                    <MetricChip label={t("cost.severity.critical")} value={governance.summary.critical} tone="bad" />
+                    <MetricChip label={t("cost.severity.warning")} value={governance.summary.warning} tone="warn" />
                     <MetricChip
-                      label="acknowledged"
+                      label={t("cost.status.acknowledged")}
                       value={governance.summary.acknowledged}
                       tone="ok"
                     />
@@ -354,7 +618,7 @@ export function CostGovernancePage() {
                           key={kind}
                           className="rounded-xs border border-line bg-ink/60 px-2 py-0.5 font-mono text-[9px] uppercase text-ghost"
                         >
-                          {KIND_LABEL[kind] ?? kind} × {count}
+                          {kindLabel(kind, t)} × {count}
                         </span>
                       ))}
                     </div>
@@ -362,13 +626,15 @@ export function CostGovernancePage() {
                 </section>
               )}
 
+              {canAdmin && <UsageExportPanel onToast={showToast} />}
+
               <section>
                 <h2 className="mb-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.25em] text-ghost/60">
-                  <span>Alerts / {alerts.length}</span>
+                  <span>{t("cost.alerts", { count: alerts.length })}</span>
                   {alerts.length > 0 && (
                     <span className="flex items-center gap-1 text-ok/80">
                       <CheckCircle2 size={11} />
-                      已持久化到数据库
+                      {t("cost.persisted")}
                     </span>
                   )}
                 </h2>
@@ -383,7 +649,7 @@ export function CostGovernancePage() {
                   ))}
                   {alerts.length === 0 && (
                     <p className="rounded-lg border border-line bg-ink/40 px-4 py-6 text-center text-xs text-ghost/50">
-                      暂无成本告警。当执行超出配置的 token / 费用 / 并发 / 调用上限时，这里会生成持久化告警。
+                      {t("cost.empty")}
                     </p>
                   )}
                 </div>
@@ -395,7 +661,7 @@ export function CostGovernancePage() {
                       disabled={actingId !== null}
                       className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-ink/80 px-3 text-xs text-ice transition hover:border-ghost/50 hover:bg-line/60"
                     >
-                      {nextCursor && actingId === null ? "加载更多" : "加载中…"}
+                      {nextCursor && actingId === null ? t("cost.loadMore") : t("cost.loading")}
                     </button>
                   </div>
                 )}

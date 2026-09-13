@@ -15,7 +15,7 @@ export function PlatformAdminPage() {
   if (ready && !canAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="ambient-stage flex h-full w-full flex-col overflow-hidden bg-void text-ice">
+    <div className="ambient-stage flex h-full w-full flex-col overflow-hidden text-ice">
       <header
         role="presentation"
         className="glass relative z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-5"
@@ -24,7 +24,7 @@ export function PlatformAdminPage() {
           <ShieldCheck size={18} />
         </span>
         <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold text-ice sm:text-base">
+          <h1 className="workspace-page-title">
             平台管理台
           </h1>
           <p className="font-mono text-[9px] uppercase text-ghost/50">
