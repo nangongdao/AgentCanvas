@@ -9,7 +9,7 @@ from typing import Literal
 
 from alembic.autogenerate import comparators
 from alembic.autogenerate.api import AutogenContext
-from alembic.util.langhelpers import PriorityDispatchResult
+from alembic.util.langhelpers import DispatchPriority, PriorityDispatchResult
 from sqlalchemy import Column, pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -40,7 +40,7 @@ def _include_name(
     return type_ != "table" or name not in LANGGRAPH_CHECKPOINT_TABLES
 
 
-@comparators.dispatch_for("column")
+@comparators.dispatch_for("column", subgroup="nullable", priority=DispatchPriority.FIRST)
 def _ignore_pk_nullability(
     _context: AutogenContext,
     _alter_column_op,
@@ -57,6 +57,9 @@ def _ignore_pk_nullability(
     (the "no app" / "no model" usage-fact buckets). SQLite keeps them truly
     nullable; stopping this comparator on PostgreSQL keeps both backends in
     sync without a fake migration.
+
+    Registered against the ``nullable`` subgroup at FIRST priority so it runs
+    before alembic's built-in ``_compare_nullable`` and can STOP it.
     """
     if not _context.dialect.name.startswith("postgres"):
         return PriorityDispatchResult.CONTINUE
