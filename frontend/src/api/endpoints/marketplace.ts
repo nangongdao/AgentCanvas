@@ -78,6 +78,13 @@ export async function getMarketplaceWorkflow(
   return apiGet<MarketplaceWorkflowDTO>(`/marketplace/workflows/${workflowId}`);
 }
 
+/** Return the marketplace entry for an originating workflow, or null if never published. */
+export async function getMarketplaceEntryByWorkflow(
+  workflowId: string,
+): Promise<MarketplaceWorkflowDTO | null> {
+  return apiGet<MarketplaceWorkflowDTO | null>(`/marketplace/entry/${workflowId}`);
+}
+
 export async function publishWorkflow(
   workflowId: string,
   metadata: PublishMetadata,

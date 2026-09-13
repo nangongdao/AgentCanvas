@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Download,
   Filter,
@@ -46,7 +46,6 @@ export function MarketplacePage() {
   const [sortBy, setSortBy] = useState<SortOption>("downloads");
   const [page, setPage] = useState(1);
   const [selectedWorkflow, setSelectedWorkflow] = useState<MarketplaceWorkflowDTO | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const showNotification = (message: string) => {
     setNotification(message);
@@ -251,7 +250,6 @@ export function MarketplacePage() {
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ghost" />
               <input
-                ref={searchRef}
                 type="text"
                 placeholder="搜索工作流..."
                 value={searchQuery}

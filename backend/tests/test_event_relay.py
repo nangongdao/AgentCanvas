@@ -103,7 +103,7 @@ async def test_upgrade_creates_event_relay_cursor_table(tmp_path) -> None:
             assert version.scalar_one() == CURRENT_REVISION
         assert "execution_event_relay_cursors" in tables
         assert tables >= CURRENT_TABLES
-        assert CURRENT_REVISION == "0047_evaluation_policy"
+        assert CURRENT_REVISION == "2a2231226aa0"
     finally:
         await engine.dispose()
 

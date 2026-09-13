@@ -27,12 +27,12 @@ def test_stale_current_revision_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(check_migration_head, "alembic_heads", lambda: ("0047_old",))
     ok, message = evaluate()
     assert not ok
-    assert "CURRENT_REVISION is '0047_evaluation_policy'" in message
+    assert "CURRENT_REVISION is '2a2231226aa0'" in message
     assert "0047_old" in message
 
 
 def test_single_matching_head_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(check_migration_head, "alembic_heads", lambda: ("0047_evaluation_policy",))
+    monkeypatch.setattr(check_migration_head, "alembic_heads", lambda: ("2a2231226aa0",))
     ok, message = evaluate()
     assert ok
     assert "parity ok" in message

@@ -1,309 +1,288 @@
-"""Test marketplace API endpoints."""
+"""Marketplace API endpoint tests.
+
+These cover the publish → list → detail → update → install → review flow.
+Auth is disabled (single-user local mode) so requests run without tokens.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.testclient import TestClient
 
-from app.db.models.identity import User
-from app.db.models.workflow import Workflow
+from app.core.config import Settings
+from app.main import create_app
+
+FERNET_KEY = "BjzaAlRXaAJ8S_6Vj4_Yf6YmMBtMo2rHtE1L6T2HYXs="
 
 
-@pytest.mark.asyncio
-async def test_publish_workflow(client: AsyncClient, admin_token: str, db: AsyncSession):
-    """Test publishing a workflow to marketplace."""
-    # Create a workflow first
-    workflow_response = await client.post(
+def _settings(tmp_path) -> Settings:
+    return Settings(
+        data_dir=tmp_path,
+        environment="test",
+        auth_mode="disabled",
+        secret_key=FERNET_KEY,
+    )
+
+
+@pytest.fixture
+def client(tmp_path) -> Iterator[TestClient]:
+    with TestClient(create_app(_settings(tmp_path))) as c:
+        yield c
+
+
+def _dsl() -> dict:
+    """A minimal valid workflow DSL (exactly one start and one end node)."""
+    return {
+        "nodes": [
+            {"id": "n_start", "type": "start", "data": {}},
+            {"id": "n_end", "type": "end", "data": {}},
+        ],
+        "edges": [{"id": "e1", "source": "n_start", "target": "n_end"}],
+    }
+
+
+def _create_workflow(client: TestClient, name: str) -> str:
+    """Create a workflow through the API and return its id."""
+    response = client.post(
         "/api/workflows",
-        json={
-            "name": "Test Workflow",
-            "description": "A test workflow",
-            "dsl_json": {"nodes": [], "edges": []},
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": name, "description": "test", "dsl": _dsl()},
     )
-    assert workflow_response.status_code == 201
-    workflow_id = workflow_response.json()["id"]
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
 
-    # Publish to marketplace
-    response = await client.post(
+
+def _publish(client: TestClient, workflow_id: str, **overrides) -> dict:
+    payload = {
+        "display_name": "Test Workflow",
+        "description": "Published from tests",
+        "category": "automation",
+        "tags": ["ai", "test"],
+        "version": "1.0.0",
+        "changelog": "Initial release",
+        "dependencies": {},
+    }
+    payload.update(overrides)
+    response = client.post(
         f"/api/marketplace/publish?workflow_id={workflow_id}",
-        json={
-            "display_name": "Amazing Workflow",
-            "description": "This is an amazing workflow",
-            "category": "automation",
-            "tags": ["productivity", "ai"],
-            "version": "1.0.0",
-            "changelog": "Initial release",
-            "dependencies": {},
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
+        json=payload,
     )
-    assert response.status_code == 200
-    data = response.json()
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_publish_workflow(client: TestClient) -> None:
+    """Publishing a workflow creates an approved marketplace entry."""
+    workflow_id = _create_workflow(client, "Test Workflow")
+    data = _publish(client, workflow_id, display_name="Amazing Workflow")
+
     assert data["display_name"] == "Amazing Workflow"
     assert data["category"] == "automation"
-    assert data["tags"] == ["productivity", "ai"]
+    assert data["tags"] == ["ai", "test"]
     assert data["version"] == "1.0.0"
     assert data["downloads"] == 0
     assert data["rating"] == 0.0
     assert data["rating_count"] == 0
     assert data["status"] == "approved"
+    assert data["author_name"] == "本地用户"
 
 
-@pytest.mark.asyncio
-async def test_list_marketplace_workflows(client: AsyncClient, admin_token: str):
-    """Test browsing marketplace workflows."""
-    response = await client.get(
-        "/api/marketplace/workflows",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
+def test_list_marketplace_workflows(client: TestClient) -> None:
+    """Browsing marketplace workflows returns a JSON list."""
+    response = client.get("/api/marketplace/workflows")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
 
 
-@pytest.mark.asyncio
-async def test_list_marketplace_workflows_with_filters(
-    client: AsyncClient, admin_token: str, db: AsyncSession
-):
-    """Test browsing marketplace workflows with category filter."""
-    # Create and publish workflow
-    workflow_response = await client.post(
-        "/api/workflows",
-        json={
-            "name": "Analytics Workflow",
-            "description": "Data analytics",
-            "dsl_json": {"nodes": [], "edges": []},
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    workflow_id = workflow_response.json()["id"]
-
-    await client.post(
-        f"/api/marketplace/publish?workflow_id={workflow_id}",
-        json={
-            "display_name": "Analytics Tool",
-            "description": "Data analytics workflow",
-            "category": "analytics",
-            "tags": ["data"],
-            "version": "1.0.0",
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
+def test_list_marketplace_workflows_with_filters(client: TestClient) -> None:
+    """Category filtering narrows the result set."""
+    workflow_id = _create_workflow(client, "Analytics Workflow")
+    _publish(
+        client,
+        workflow_id,
+        display_name="Analytics Tool",
+        description="Data analytics workflow",
+        category="analytics",
+        tags=["data"],
     )
 
-    # Filter by category
-    response = await client.get(
-        "/api/marketplace/workflows?category=analytics",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
+    response = client.get("/api/marketplace/workflows?category=analytics")
     assert response.status_code == 200
     data = response.json()
-    assert all(w["category"] == "analytics" for w in data)
+    assert len(data) == 1
+    assert data[0]["category"] == "analytics"
 
 
-@pytest.mark.asyncio
-async def test_install_workflow(client: AsyncClient, admin_token: str, db: AsyncSession):
-    """Test installing a workflow from marketplace."""
-    # Create and publish workflow
-    workflow_response = await client.post(
-        "/api/workflows",
+def test_search_marketplace_workflows(client: TestClient) -> None:
+    """Server-side search matches display name/description."""
+    workflow_id = _create_workflow(client, "Search Me")
+    _publish(client, workflow_id, display_name="Searchable Tool")
+
+    hit = client.get("/api/marketplace/workflows?search=searchable")
+    assert hit.status_code == 200
+    assert len(hit.json()) == 1
+
+    miss = client.get("/api/marketplace/workflows?search=nomatchxyz")
+    assert miss.status_code == 200
+    assert len(miss.json()) == 0
+
+
+def test_search_escapes_wildcards(client: TestClient) -> None:
+    """A literal % in the query must not match every row."""
+    workflow_id = _create_workflow(client, "Wildcard % WF")
+    _publish(client, workflow_id, display_name="Has 100% in name")
+
+    # Literal % should match the row containing 100%
+    hit = client.get("/api/marketplace/workflows?search=100%25")
+    assert hit.status_code == 200
+    assert len(hit.json()) == 1
+
+    # A bare % query matches a literal percent, not everything
+    bare = client.get("/api/marketplace/workflows?search=%25")
+    assert bare.status_code == 200
+    assert len(bare.json()) == 1
+
+
+def test_get_marketplace_entry_by_workflow(client: TestClient) -> None:
+    """Entry lookup by originating workflow id distinguishes published state."""
+    # Unpublished workflow -> null
+    workflow_id = _create_workflow(client, "Not Published")
+    response = client.get(f"/api/marketplace/entry/{workflow_id}")
+    assert response.status_code == 200
+    assert response.json() is None
+
+    # Published workflow -> entry
+    published_id = _create_workflow(client, "Published WF")
+    _publish(client, published_id, display_name="Published Entry")
+    response = client.get(f"/api/marketplace/entry/{published_id}")
+    assert response.status_code == 200
+    assert response.json()["display_name"] == "Published Entry"
+
+
+def test_update_published_workflow(client: TestClient) -> None:
+    """The PUT endpoint updates metadata of an existing entry."""
+    workflow_id = _create_workflow(client, "Updatable WF")
+    data = _publish(client, workflow_id, version="1.0.0")
+    marketplace_id = data["id"]
+
+    response = client.put(
+        f"/api/marketplace/publish/{marketplace_id}",
         json={
-            "name": "Source Workflow",
-            "description": "Original",
-            "dsl_json": {"nodes": [{"id": "1", "type": "start"}], "edges": []},
+            "display_name": "Updated Name",
+            "description": "Updated description",
+            "category": "automation",
+            "tags": ["ai"],
+            "version": "2.0.0",
         },
-        headers={"Authorization": f"Bearer {admin_token}"},
     )
-    workflow_id = workflow_response.json()["id"]
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert updated["display_name"] == "Updated Name"
+    assert updated["version"] == "2.0.0"
 
-    publish_response = await client.post(
-        f"/api/marketplace/publish?workflow_id={workflow_id}",
-        json={
-            "display_name": "Installable Workflow",
-            "description": "Ready to install",
-            "category": "tools",
-            "tags": [],
-            "version": "1.0.0",
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    marketplace_id = publish_response.json()["id"]
 
-    # Install workflow
-    install_response = await client.post(
-        f"/api/marketplace/install/{marketplace_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    assert install_response.status_code == 200
+def test_install_workflow(client: TestClient) -> None:
+    """Installing clones the workflow and increments the download count."""
+    workflow_id = _create_workflow(client, "Source Workflow")
+    data = _publish(client, workflow_id, display_name="Installable Workflow")
+    marketplace_id = data["id"]
+
+    install_response = client.post(f"/api/marketplace/install/{marketplace_id}")
+    assert install_response.status_code == 200, install_response.text
     install_data = install_response.json()
-    assert "workflow_id" in install_data
+    cloned_id = install_data["workflow_id"]
     assert "message" in install_data
 
-    # Verify cloned workflow exists
-    cloned_id = install_data["workflow_id"]
-    verify_response = await client.get(
-        f"/api/workflows/{cloned_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    assert verify_response.status_code == 200
-    cloned_workflow = verify_response.json()
-    assert "(from marketplace)" in cloned_workflow["name"]
+    # Cloned workflow exists with marketplace suffix
+    verify = client.get(f"/api/workflows/{cloned_id}")
+    assert verify.status_code == 200
+    assert "(from marketplace)" in verify.json()["name"]
 
-    # Verify download count increased
-    detail_response = await client.get(
-        f"/api/marketplace/workflows/{marketplace_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    assert detail_response.json()["downloads"] == 1
+    # Download count incremented
+    detail = client.get(f"/api/marketplace/workflows/{marketplace_id}")
+    assert detail.status_code == 200
+    assert detail.json()["downloads"] == 1
 
 
-@pytest.mark.asyncio
-async def test_create_review(client: AsyncClient, admin_token: str, db: AsyncSession):
-    """Test creating a review for marketplace workflow."""
-    # Create and publish workflow
-    workflow_response = await client.post(
-        "/api/workflows",
-        json={
-            "name": "Reviewable Workflow",
-            "description": "Can be reviewed",
-            "dsl_json": {"nodes": [], "edges": []},
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    workflow_id = workflow_response.json()["id"]
-
-    publish_response = await client.post(
-        f"/api/marketplace/publish?workflow_id={workflow_id}",
-        json={
-            "display_name": "Review Test",
-            "description": "Testing reviews",
-            "category": "test",
-            "tags": [],
-            "version": "1.0.0",
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    marketplace_id = publish_response.json()["id"]
+def test_create_and_update_review(client: TestClient) -> None:
+    """Creating and updating a review keeps aggregate rating correct."""
+    workflow_id = _create_workflow(client, "Reviewable WF")
+    data = _publish(client, workflow_id, display_name="Review Test")
+    marketplace_id = data["id"]
 
     # Create review
-    review_response = await client.post(
-        f"/api/marketplace/workflows/{marketplace_id}/reviews",
-        json={
-            "rating": 5,
-            "comment": "Excellent workflow!",
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    assert review_response.status_code == 200
-    review_data = review_response.json()
-    assert review_data["rating"] == 5
-    assert review_data["comment"] == "Excellent workflow!"
-
-    # Verify rating updated
-    detail_response = await client.get(
-        f"/api/marketplace/workflows/{marketplace_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    marketplace_data = detail_response.json()
-    assert marketplace_data["rating"] == 5.0
-    assert marketplace_data["rating_count"] == 1
-
-
-@pytest.mark.asyncio
-async def test_update_review(client: AsyncClient, admin_token: str, db: AsyncSession):
-    """Test updating an existing review."""
-    # Create and publish workflow
-    workflow_response = await client.post(
-        "/api/workflows",
-        json={
-            "name": "Update Review Test",
-            "description": "Testing review updates",
-            "dsl_json": {"nodes": [], "edges": []},
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    workflow_id = workflow_response.json()["id"]
-
-    publish_response = await client.post(
-        f"/api/marketplace/publish?workflow_id={workflow_id}",
-        json={
-            "display_name": "Review Update Test",
-            "description": "Testing",
-            "category": "test",
-            "tags": [],
-            "version": "1.0.0",
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    marketplace_id = publish_response.json()["id"]
-
-    # Create initial review
-    await client.post(
+    create_response = client.post(
         f"/api/marketplace/workflows/{marketplace_id}/reviews",
         json={"rating": 3, "comment": "Okay"},
-        headers={"Authorization": f"Bearer {admin_token}"},
     )
+    assert create_response.status_code == 200, create_response.text
+    assert create_response.json()["rating"] == 3
 
-    # Update review
-    update_response = await client.post(
+    detail = client.get(f"/api/marketplace/workflows/{marketplace_id}").json()
+    assert detail["rating"] == 3.0
+    assert detail["rating_count"] == 1
+
+    # Update review (same user)
+    update_response = client.post(
         f"/api/marketplace/workflows/{marketplace_id}/reviews",
         json={"rating": 5, "comment": "Actually great!"},
-        headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert update_response.status_code == 200
+    assert update_response.status_code == 200, update_response.text
     assert update_response.json()["rating"] == 5
 
-    # Verify rating recalculated correctly
-    detail_response = await client.get(
-        f"/api/marketplace/workflows/{marketplace_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    assert detail_response.json()["rating"] == 5.0
-    assert detail_response.json()["rating_count"] == 1
+    detail = client.get(f"/api/marketplace/workflows/{marketplace_id}").json()
+    assert detail["rating"] == 5.0
+    assert detail["rating_count"] == 1
 
 
-@pytest.mark.asyncio
-async def test_list_reviews(client: AsyncClient, admin_token: str, db: AsyncSession):
-    """Test listing reviews for a marketplace workflow."""
-    # Create and publish workflow
-    workflow_response = await client.post(
-        "/api/workflows",
-        json={
-            "name": "List Reviews Test",
-            "description": "Testing review listing",
-            "dsl_json": {"nodes": [], "edges": []},
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    workflow_id = workflow_response.json()["id"]
+def test_list_reviews(client: TestClient) -> None:
+    """Listing reviews returns the created review."""
+    workflow_id = _create_workflow(client, "List Reviews WF")
+    data = _publish(client, workflow_id, display_name="Review List Test")
+    marketplace_id = data["id"]
 
-    publish_response = await client.post(
-        f"/api/marketplace/publish?workflow_id={workflow_id}",
-        json={
-            "display_name": "Review List Test",
-            "description": "Testing",
-            "category": "test",
-            "tags": [],
-            "version": "1.0.0",
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    marketplace_id = publish_response.json()["id"]
-
-    # Create review
-    await client.post(
+    client.post(
         f"/api/marketplace/workflows/{marketplace_id}/reviews",
         json={"rating": 4, "comment": "Good"},
-        headers={"Authorization": f"Bearer {admin_token}"},
     )
 
-    # List reviews
-    list_response = await client.get(
-        f"/api/marketplace/workflows/{marketplace_id}/reviews",
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
+    list_response = client.get(f"/api/marketplace/workflows/{marketplace_id}/reviews")
     assert list_response.status_code == 200
     reviews = list_response.json()
     assert len(reviews) == 1
     assert reviews[0]["rating"] == 4
     assert reviews[0]["comment"] == "Good"
+
+
+def test_validation_rejects_bad_input(client: TestClient) -> None:
+    """Server-side validators reject bad tags and non-http icon URLs."""
+    workflow_id = _create_workflow(client, "Validation WF")
+
+    # Too many tags
+    response = client.post(
+        f"/api/marketplace/publish?workflow_id={workflow_id}",
+        json={
+            "display_name": "Bad Tags",
+            "description": "test",
+            "category": "automation",
+            "tags": [f"t{i}" for i in range(11)],
+            "version": "1.0.0",
+        },
+    )
+    assert response.status_code == 422
+
+    # javascript: icon URL
+    response = client.post(
+        f"/api/marketplace/publish?workflow_id={workflow_id}",
+        json={
+            "display_name": "Bad Icon",
+            "description": "test",
+            "category": "automation",
+            "tags": [],
+            "version": "1.0.0",
+            "icon_url": "javascript:alert(1)",
+        },
+    )
+    assert response.status_code == 422

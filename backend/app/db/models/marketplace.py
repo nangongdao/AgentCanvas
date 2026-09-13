@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -38,7 +39,7 @@ class MarketplaceWorkflow(Base):
     # Marketplace metadata
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     icon_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
 
@@ -50,18 +51,18 @@ class MarketplaceWorkflow(Base):
     dependencies: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     # Statistics
-    downloads: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    downloads: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, index=True)
     rating_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Moderation status
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending"
+        String(20), nullable=False, default="pending", index=True
     )  # pending, approved, rejected
     moderator_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    published_at: Mapped[datetime] = mapped_column(nullable=False)
+    published_at: Mapped[datetime] = mapped_column(nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
     # Relationships
@@ -91,6 +92,8 @@ class MarketplaceReview(Base):
             name="uq_one_review_per_user"
         ),
         CheckConstraint("rating >= 1 AND rating <= 5", name="ck_rating_range"),
+        Index("ix_marketplace_reviews_workflow_id", "marketplace_workflow_id"),
+        Index("ix_marketplace_reviews_created_at", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)

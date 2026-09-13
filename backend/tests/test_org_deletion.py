@@ -503,4 +503,4 @@ def test_migration_adds_deletion_columns(tmp_path: Path) -> None:
     assert "deletion_requested_at" in cols
     assert "deletion_requested_by" in cols
     assert "purge_due_at" in cols
-    assert CURRENT_REVISION == "0047_evaluation_policy"
+    assert CURRENT_REVISION == "2a2231226aa0"

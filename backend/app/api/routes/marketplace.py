@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -89,8 +89,7 @@ class MarketplaceWorkflowResponse(BaseModel):
     published_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReviewInput(BaseModel):
@@ -112,8 +111,7 @@ class ReviewResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InstallResponse(BaseModel):
@@ -410,7 +408,11 @@ async def get_marketplace_workflow(
     session: SessionDep,
     _principal: ViewerDep,
 ) -> MarketplaceWorkflowResponse:
-    """Get marketplace workflow details."""
+    """Get marketplace workflow details.
+
+    ``workflow_id`` here is the *marketplace* entry id (the primary key of
+    ``marketplace_workflows``), not the originating workflow id.
+    """
 
     result = await session.execute(
         select(MarketplaceWorkflow, User)
@@ -421,6 +423,55 @@ async def get_marketplace_workflow(
 
     if not row:
         raise HTTPException(status_code=404, detail="Marketplace workflow not found")
+
+    mw, user = row
+
+    return MarketplaceWorkflowResponse(
+        id=mw.id,
+        workflow_id=mw.workflow_id,
+        author_id=mw.author_id,
+        author_name=user.display_name or user.email,
+        display_name=mw.display_name,
+        description=mw.description,
+        category=mw.category,
+        tags=mw.tags,
+        icon_url=mw.icon_url,
+        version=mw.version,
+        changelog=mw.changelog,
+        dependencies=mw.dependencies,
+        downloads=mw.downloads,
+        rating=mw.rating,
+        rating_count=mw.rating_count,
+        status=mw.status,
+        published_at=mw.published_at,
+        updated_at=mw.updated_at,
+    )
+
+
+# ==================== Get Marketplace Entry by Workflow ====================
+
+
+@router.get("/entry/{workflow_id}", response_model=MarketplaceWorkflowResponse | None)
+async def get_marketplace_entry_by_workflow(
+    workflow_id: str,
+    session: SessionDep,
+    _principal: ViewerDep,
+) -> MarketplaceWorkflowResponse | None:
+    """Return the marketplace entry for an originating workflow, if any.
+
+    This lets the frontend distinguish "never published" from "published —
+    use the update endpoint". Returns 200 with ``null`` when unpublished.
+    """
+
+    result = await session.execute(
+        select(MarketplaceWorkflow, User)
+        .join(User, MarketplaceWorkflow.author_id == User.id)
+        .where(MarketplaceWorkflow.workflow_id == workflow_id)
+    )
+    row = result.one_or_none()
+
+    if not row:
+        return None
 
     mw, user = row
 

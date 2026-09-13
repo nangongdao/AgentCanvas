@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Package, X, Upload } from "lucide-react";
+import { Loader2, Package, X, Upload, RefreshCw } from "lucide-react";
 
 import { ApiError } from "@/api/client";
-import { publishWorkflow, type PublishMetadata } from "@/api/endpoints/marketplace";
+import {
+  getMarketplaceEntryByWorkflow,
+  publishWorkflow,
+  updatePublishedWorkflow,
+  type MarketplaceWorkflowDTO,
+  type PublishMetadata,
+} from "@/api/endpoints/marketplace";
 
 interface Props {
   workflowId: string;
@@ -37,6 +43,8 @@ export function PublishWorkflowDialog({
   onNotify,
   onPublished,
 }: Props) {
+  const [existing, setExisting] = useState<MarketplaceWorkflowDTO | null>(null);
+  const [checking, setChecking] = useState(true);
   const [displayName, setDisplayName] = useState(workflowName);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("automation");
@@ -47,6 +55,37 @@ export function PublishWorkflowDialog({
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Detect whether this workflow already has a marketplace entry so the
+  // dialog switches between "publish" and "update" behaviour.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const entry = await getMarketplaceEntryByWorkflow(workflowId);
+        if (cancelled) return;
+        if (entry) {
+          setExisting(entry);
+          setDisplayName(entry.display_name);
+          setDescription(entry.description);
+          setCategory(entry.category);
+          setTags(entry.tags.join(", "));
+          setIconUrl(entry.icon_url ?? "");
+          setVersion(entry.version);
+          setChangelog(entry.changelog ?? "");
+        }
+      } catch {
+        // Leave the dialog in publish mode; the failure is non-fatal.
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workflowId]);
+
+  const isUpdate = existing !== null;
 
   // Validate inputs
   const validateInputs = (): string | null => {
@@ -137,8 +176,13 @@ export function PublishWorkflowDialog({
         dependencies: {},
       };
 
-      await publishWorkflow(workflowId, metadata);
-      onNotify("工作流已发布到市场");
+      if (isUpdate && existing) {
+        await updatePublishedWorkflow(existing.id, metadata);
+        onNotify("已更新市场中的工作流");
+      } else {
+        await publishWorkflow(workflowId, metadata);
+        onNotify("工作流已发布到市场");
+      }
       onPublished();
       onClose();
     } catch (err) {
@@ -167,8 +211,12 @@ export function PublishWorkflowDialog({
               <Package size={18} className="text-accent" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-ice">发布到市场</h2>
-              <p className="text-xs text-ghost">将工作流分享到社区</p>
+              <h2 className="text-base font-semibold text-ice">
+                {isUpdate ? "更新市场信息" : "发布到市场"}
+              </h2>
+              <p className="text-xs text-ghost">
+                {isUpdate ? "更新已发布工作流的信息" : "将工作流分享到社区"}
+              </p>
             </div>
           </div>
           <button
@@ -313,13 +361,23 @@ export function PublishWorkflowDialog({
           </button>
           <button
             type="submit"
-            disabled={publishing}
+            disabled={publishing || checking}
             className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-void transition hover:bg-accent/90 disabled:opacity-50"
           >
             {publishing ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
-                发布中...
+                {isUpdate ? "更新中..." : "发布中..."}
+              </>
+            ) : checking ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                检查发布状态...
+              </>
+            ) : isUpdate ? (
+              <>
+                <RefreshCw size={14} />
+                更新市场信息
               </>
             ) : (
               <>
@@ -335,9 +393,13 @@ export function PublishWorkflowDialog({
       {showConfirm && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-void/60 backdrop-blur-xs">
           <div className="glass w-full max-w-md rounded-lg border border-line p-6 shadow-card">
-            <h3 className="mb-3 text-base font-semibold text-ice">确认发布</h3>
+            <h3 className="mb-3 text-base font-semibold text-ice">
+              {isUpdate ? "确认更新" : "确认发布"}
+            </h3>
             <p className="mb-6 text-sm text-fog">
-              发布后，工作流将对所有用户可见。确定要发布到市场吗？
+              {isUpdate
+                ? "更新后，市场中的工作流信息将立即变更。确定要更新吗？"
+                : "发布后，工作流将对所有用户可见。确定要发布到市场吗？"}
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -357,10 +419,10 @@ export function PublishWorkflowDialog({
                 {publishing ? (
                   <>
                     <Loader2 size={14} className="animate-spin" />
-                    发布中...
+                    {isUpdate ? "更新中..." : "发布中..."}
                   </>
                 ) : (
-                  "确认发布"
+                  isUpdate ? "确认更新" : "确认发布"
                 )}
               </button>
             </div>
