@@ -1,0 +1,10 @@
+[lint]
+ignore = [
+    "PLR2004",  # Magic value in comparison - HTTP status codes are well-known
+    "TRY003",   # Long exception messages - acceptable for client library
+    "N815",     # mixedCase variables - required for API compatibility (sourceHandle, targetHandle)
+    "PYI034",   # __enter__ return type - using quoted string is acceptable
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101"]  # Allow assert statements in tests

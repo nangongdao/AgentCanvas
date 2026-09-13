@@ -1,0 +1,3 @@
+# Synthetic runtime databases, temporary test keys, and caches are not planning evidence.
+verification/runtime/
+verification/**/__pycache__/

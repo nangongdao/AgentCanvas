@@ -332,11 +332,72 @@ CI 五个 job:`quality`(测试/类型/lint/覆盖率门)、`postgresql-integrati
 
 设计系统的单一事实源是仓库根目录的 [DESIGN.md](DESIGN.md)(awesome-design-md / Stitch 格式,可直接交给编码智能体);[design-system/preview.html](design-system/preview.html) 是它的可视化对照页(色板 / 字阶 / 控件 / 导航 / 面板 / 投影阶梯,含深色与浅色切换),[design-system/MASTER.md](design-system/MASTER.md) 是生成摘要。改 UI 前先读 DESIGN.md。
 
+## SDK
+
+### Python SDK
+
+```bash
+pip install agentcanvas
+```
+
+```python
+from agentcanvas import AgentCanvasClient, CreateWorkflowInput
+
+with AgentCanvasClient(api_key="your-key", base_url="http://localhost:8000") as client:
+    workflow = client.create_workflow(
+        CreateWorkflowInput(name="Example", nodes=[...], edges=[...])
+    )
+    execution = client.start_execution(workflow.id, inputs={"query": "hello"})
+    print(f"Status: {execution.status}")
+```
+
+完整文档:[sdk/python/README.md](sdk/python/README.md)
+
+### TypeScript/JavaScript SDK
+
+```bash
+npm install agentcanvas
+```
+
+```typescript
+import { AgentCanvasClient } from 'agentcanvas';
+
+const client = new AgentCanvasClient({
+  apiKey: 'your-key',
+  baseURL: 'http://localhost:8000'
+});
+
+const workflow = await client.workflows.create({
+  name: 'Example',
+  nodes: [...],
+  edges: [...]
+});
+
+const execution = await client.executions.start({
+  workflowId: workflow.id,
+  inputs: { query: 'hello' }
+});
+```
+
+完整文档:[sdk/typescript/README.md](sdk/typescript/README.md)
+
+### CLI 工具
+
+```bash
+pip install agentcanvas-cli
+agentcanvas init my-project
+cd my-project && agentcanvas dev
+```
+
+支持项目初始化、本地开发服务器、数据库迁移、备份恢复。文档:[cli/README.md](cli/README.md)
+
 ## 技术栈
 
 **前端** React 19 · TypeScript · Vite 8 · @xyflow/react 12 · Zustand + zundo · Tailwind CSS 4 · React Router 7 · Playwright
 
 **后端** Python 3.12+ · FastAPI · LangGraph 1.x · 官方 MCP SDK 2.x · SQLAlchemy 2 + Alembic · Chroma / pgvector · Redis · OpenTelemetry · pytest
+
+**SDK** Python 3.9+ · TypeScript/JavaScript · CLI 工具
 
 **LLM Provider** OpenAI 兼容协议(含 DeepSeek / vLLM 等) · Anthropic Messages API · Google Gemini · Ollama
 

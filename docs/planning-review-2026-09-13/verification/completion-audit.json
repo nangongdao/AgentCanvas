@@ -1,0 +1,14 @@
+{
+  "root": "E:/xiangmu",
+  "initial_entries": 18,
+  "current_entries": 20,
+  "initial_status_entries_preserved": true,
+  "additional_entries": [
+    "?? docs/future-roadmap-review-2026-09-13.md",
+    "?? docs/planning-review-2026-09-13/"
+  ],
+  "document_sha256": "f3676719a7fadf5abaec767984a64083c48da7f86c7fbee7ada56f7775d98ac9",
+  "source_path_references": 45,
+  "markdown_links": 6,
+  "business_implementation_performed": false
+}

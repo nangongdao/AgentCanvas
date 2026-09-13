@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentcanvas"
+version = "0.1.0"
+description = "Python SDK for AgentCanvas API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+keywords = ["agentcanvas", "workflow", "automation", "agent", "sdk", "api-client"]
+authors = [
+  { name = "AgentCanvas Team" }
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "httpx>=0.24.0",
+  "pydantic>=2.0.0",
+  "typing-extensions>=4.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0.0",
+  "pytest-asyncio>=0.21.0",
+  "pytest-mock>=3.10.0",
+  "mypy>=1.0.0",
+  "ruff>=0.1.0",
+]
+
+[project.urls]
+Documentation = "https://docs.agentcanvas.dev"
+Repository = "https://github.com/yourusername/agentcanvas"
+Issues = "https://github.com/yourusername/agentcanvas/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentcanvas"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "ANN", "B", "A", "COM", "C4", "DTZ", "ISC", "ICN", "G", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "ARG", "PTH", "PD", "PGH", "PL", "TRY", "NPY", "RUF"]
+ignore = ["ANN101", "ANN102", "ANN401"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
